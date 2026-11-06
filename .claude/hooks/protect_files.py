@@ -12,6 +12,11 @@ File tools (Edit/Write/NotebookEdit) are blocked outright for protected files.
 Shell tools (Bash/PowerShell) are blocked when the command names a protected
 file together with a modifying or deleting operation. Read-only use (cat, grep,
 head, loading the JSON in code) is allowed. Shell matching is best-effort.
+
+Two deliberate exceptions keep harmless commands from being blocked:
+  - .env.example / .env.sample / .env.template are placeholder files, not .env.
+  - The text of a `git commit -m "..."` message is not analysed (it is only
+    prose), unless it contains command substitution that could run code.
 """
 
 import json
@@ -32,11 +37,12 @@ PROTECTED_PATHS = (
     ".claude/hooks/",
 )
 
+
 FILE_TOOLS = {"Edit", "Write", "NotebookEdit", "MultiEdit"}
 SHELL_TOOLS = {"Bash", "PowerShell"}
 
-# Operations that modify or delete a file when they appear in a shell command.
-MUTATING = re.compile(
+# Words that modify or delete a file when they appear in a shell command.
+MUTATING_WORDS = re.compile(
     r"""(?ix)
     (?<![\w-])(
         rm | rmdir | del | erase | unlink | shred | truncate | tee
@@ -49,13 +55,45 @@ MUTATING = re.compile(
       | \.write_text | \.write_bytes | \.unlink | \.rename | \.replace
       | open\([^)]*['"][^'"]*[wax+][^'"]*['"]
     )(?![\w-])
-    | (?<![\d&])>{1,2}(?!&)          # output redirection
     """
 )
 
+# Output redirection (> or >>), but not 2>&1 style descriptor duplication.
+REDIRECT = re.compile(r"(?<![\d&])>{1,2}(?!&)")
+
+# Placeholder files that merely look like .env.
+PLACEHOLDER_ENV = re.compile(r"\.env\.(?:example|sample|template)(?![\w-])")
+
+# The -m / --message argument of `git commit`, double or single quoted.
+COMMIT_MESSAGE = re.compile(r"""(-m|--message)(?:\s+|=)("(?:[^"\\]|\\.)*"|'[^']*')""")
+
 
 def normalise(text: str) -> str:
+    """Lower-case a path or command and use forward slashes."""
     return text.replace("\\", "/").lower()
+
+
+def strip_commit_messages(command: str) -> str:
+    """Remove plain-text `git commit -m` messages so prose is not mistaken for commands.
+
+    A message containing a backtick or a `$(...)` substitution (other than the
+    usual `$(cat <<'EOF' ...)` heredoc) is kept, since it could run code.
+    """
+    if not re.search(r"\bgit\s+commit\b", command, re.IGNORECASE):
+        return command
+
+    def blank(match: re.Match[str]) -> str:
+        body = match.group(2)
+        if "`" in body or re.search(r"\$\((?!\s*cat\s*<<)", body):
+            return match.group(0)
+        return f"{match.group(1)} ''"
+
+    return COMMIT_MESSAGE.sub(blank, command)
+
+
+def is_mutating(command: str) -> bool:
+    """Return True if the command contains a modifying word or a redirect."""
+    return bool(MUTATING_WORDS.search(command) or REDIRECT.search(command))
 
 
 def protected_in_path(path: str) -> str | None:
@@ -76,7 +114,7 @@ def protected_in_path(path: str) -> str | None:
 
 def protected_in_command(command: str) -> str | None:
     """Return what is protected if a shell command mentions a protected file."""
-    norm = normalise(command)
+    norm = PLACEHOLDER_ENV.sub("", normalise(command))
     for name in PROTECTED_NAMES:
         if re.search(rf"(?<![\w.-]){re.escape(name.lower())}(?![\w-])", norm):
             return name
@@ -87,6 +125,7 @@ def protected_in_command(command: str) -> str | None:
 
 
 def main() -> int:
+    """Check one tool call read from stdin; return 2 to block it, 0 to allow it."""
     try:
         data = json.load(sys.stdin)
     except (json.JSONDecodeError, ValueError):
@@ -105,9 +144,9 @@ def main() -> int:
             return 2
 
     if tool in SHELL_TOOLS:
-        command = str(tool_input.get("command") or "")
+        command = strip_commit_messages(str(tool_input.get("command") or ""))
         hit = protected_in_command(command)
-        if hit and MUTATING.search(command):
+        if hit and is_mutating(command):
             print(
                 f"Blocked: this command may modify or delete protected '{hit}'. "
                 "Protected files must never be edited or deleted.",

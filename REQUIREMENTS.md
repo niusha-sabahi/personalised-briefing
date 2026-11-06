@@ -25,16 +25,16 @@ Status: `[ ]` not started · `[~]` in progress or partly done · `[x]` complete 
   - Every statement in a topic section must be traceable to a cited source passage that relates to that section's topic.
 
 **Application**
-- [ ] M9. Backend is a FastAPI server exposing at least: `GET /health`, `GET /topics` (the taxonomy), and an endpoint that returns a persona's briefing as Markdown (for example `GET /briefings/{persona_id}`, with `persona_id` being `healthcare-policy-analyst` or `tech-founder`).
+- [~] M9. Backend is a FastAPI server exposing at least: `GET /health`, `GET /topics` (the taxonomy), and an endpoint that returns a persona's briefing as Markdown (for example `GET /briefings/{persona_id}`, with `persona_id` being `healthcare-policy-analyst` or `tech-founder`).
 - [ ] M10. A minimal frontend (any framework) that selects a persona and renders the Markdown briefing.
-- [ ] M11. The OpenAI key is read from the environment or `.env`. It is never committed or logged, and `.env` stays gitignored.
+- [~] M11. The OpenAI key is read from the environment or `.env`. It is never committed or logged, and `.env` stays gitignored.
 
 **Project and delivery**
-- [ ] M12. A uv project: `pyproject.toml` plus a committed `uv.lock`, a `.python-version` file, and a `.venv/` created by `uv sync`. All commands run through the venv (`uv run ...`).
-- [ ] M13. Plain Python only, with no notebooks.
-- [ ] M14. `README.md` covers prerequisites, setup (`uv sync`, copy `.env.example` to `.env`), how to run the server and frontend, how to call the API, and how to run the tests.
+- [x] M12. A uv project: `pyproject.toml` plus a committed `uv.lock`, a `.python-version` file, and a `.venv/` created by `uv sync`. All commands run through the venv (`uv run ...`).
+- [~] M13. Plain Python only, with no notebooks.
+- [~] M14. `README.md` covers prerequisites, setup (`uv sync`, copy `.env.example` to `.env`), how to run the server and frontend, how to call the API, and how to run the tests.
 - [ ] M15. Extension: an Agent Skill (a `SKILL.md` with name and description frontmatter, following agentskills.io) that lets a coding agent set up, start and test the application, including calling the endpoints and checking that the output is valid.
-- [ ] M16. Deliver everything as one private GitHub repository. The repo root is the project root (the existing `takehome/` git repo, with its `origin` remote), and it contains all of the following, committed:
+- [~] M16. Deliver everything as one private GitHub repository. The repo root is the project root (the existing `takehome/` git repo, with its `origin` remote), and it contains all of the following, committed:
   - Backend source in `src/`, the frontend, and `tests/`.
   - `pyproject.toml`, `uv.lock`, `.python-version`, `.gitignore`, `.env.example`, and `README.md`.
   - The input data file `sources_06-05-25.json`, so the app runs after a clone with no extra downloads.
@@ -50,15 +50,15 @@ Status: `[ ]` not started · `[~]` in progress or partly done · `[x]` complete 
 ## S – Should have
 
 **Project layout and tooling**
-- [ ] S1. `src/` layout with a named package, for example `src/briefing/`, split into modules: `config`, `sources` (load, clean, date), `topics` (taxonomy and personas), `embeddings`, `tagging` (multi-label assignment), `retrieval` (persona selection from tags), `generation`, `api`, `models`. `pyproject.toml` defines the package and a script entry point.
-- [ ] S2. Dependencies are split into runtime and dev groups (`uv add --dev`). Dev tools: `ruff` (lint and format), `mypy` or `pyright` (type checking), `pytest`, `pytest-asyncio` or `httpx` for API tests, and `pytest-cov`.
-- [ ] S3. Ruff and the type checker are configured in `pyproject.toml`. Both must pass with zero errors, and type hints are used throughout. Ruff enables the `D` (pydocstyle) rules with the Google convention, so a missing or malformed docstring on a public module, function, class or method fails lint.
-- [ ] S4. Pre-commit hooks (ruff, type check) and CI (a GitHub Actions workflow running `uv sync --locked`, lint, type check and tests).
-- [ ] S5. A `.env.example` with placeholder values, and `.gitignore` entries for `.venv/`, `.env`, caches and coverage output.
+- [~] S1. `src/` layout with a named package, for example `src/briefing/`, split into modules: `config`, `sources` (load, clean, date), `topics` (taxonomy and personas), `embeddings`, `tagging` (multi-label assignment), `retrieval` (persona selection from tags), `generation`, `api`, `models`. `pyproject.toml` defines the package and a script entry point.
+- [x] S2. Dependencies are split into runtime and dev groups (`uv add --dev`). Dev tools: `ruff` (lint and format), `mypy` or `pyright` (type checking), `pytest`, `pytest-asyncio` or `httpx` for API tests, and `pytest-cov`.
+- [x] S3. Ruff and the type checker are configured in `pyproject.toml`. Both must pass with zero errors, and type hints are used throughout. Ruff enables the `D` (pydocstyle) rules with the Google convention, so a missing or malformed docstring on a public module, function, class or method fails lint.
+- [~] S4. Pre-commit hooks (ruff, type check) and CI (a GitHub Actions workflow running `uv sync --locked`, lint, type check and tests).
+- [x] S5. A `.env.example` with placeholder values, and `.gitignore` entries for `.venv/`, `.env`, caches and coverage output.
 
 **Configuration and security**
-- [ ] S6. Settings are loaded with `pydantic-settings`: API key, model names, tagging threshold, max tags per source, top-k, per-topic minimum, cutoff date, and cache path. No hard-coded secrets or model names in code.
-- [ ] S7. The key is wrapped as `SecretStr`. Logs and error responses never contain it. Check git history for a leaked key before pushing.
+- [x] S6. Settings are loaded with `pydantic-settings`: API key, model names, tagging threshold, max tags per source, top-k, per-topic minimum, cutoff date, and cache path. No hard-coded secrets or model names in code.
+- [~] S7. The key is wrapped as `SecretStr`. Logs and error responses never contain it. Check git history for a leaked key before pushing.
 - [ ] S8. Source text is untrusted. The prompt separates instructions from source content and tells the model to ignore instructions found inside sources. Generated Markdown is sanitised or escaped when rendered in the frontend.
 - [ ] S9. Pydantic models validate request and response shapes, and validate the topic and persona data files at startup (unique topic ids, every persona topic id exists in the taxonomy). Path parameters are restricted to known personas, and unknown ones return 404.
 
@@ -77,7 +77,7 @@ Status: `[ ]` not started · `[~]` in progress or partly done · `[x]` complete 
 - [ ] S19. One opt-in integration test (marked, skipped without a key) that runs the whole pipeline against the live API and checks that the output is non-empty Markdown with valid references.
 
 **Documentation**
-- [ ] S20. The README has a short architecture overview (one paragraph or a small diagram of the flow: clean, embed, tag, retrieve, generate, validate citations) that matches the code. Endpoints have a `summary`, response models and error responses so `/docs` serves as the API reference. Config options are documented once, in `.env.example` and the settings class.
+- [~] S20. The README has a short architecture overview (one paragraph or a small diagram of the flow: clean, embed, tag, retrieve, generate, validate citations) that matches the code. Endpoints have a `summary`, response models and error responses so `/docs` serves as the API reference. Config options are documented once, in `.env.example` and the settings class.
 
 ## C – Could have
 

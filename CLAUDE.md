@@ -4,7 +4,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Status
 
-The repo currently contains only the assignment ([task.md](task.md)), the input data, and a `.env`. No application code, dependencies, build, lint, or test tooling exists yet. Update this file (commands, architecture) as the implementation lands.
+The project scaffold is in place: a uv project with a `src/briefing/` package (module placeholders plus `config` and a `/health` API), ruff, mypy (strict) and pytest configured, pre-commit and CI config written. The briefing pipeline is not implemented yet. See [README.md](README.md) and REQUIREMENTS.md for progress.
+
+Commands (all through uv; if `uv` is not on PATH, use `python -m uv`):
+- `uv sync`: install into `.venv`.
+- `uv run ruff format` and `uv run ruff check --fix`: format and lint (the `D` docstring rules are on).
+- `uv run mypy src`: type check.
+- `uv run pytest --cov`: full test suite.
+- `uv run briefing`: serve the API on http://127.0.0.1:8000.
+
+Gotcha: the protect hook matches shell commands loosely (best-effort). `.env.example` and the text of `git commit -m` messages are exempt, but a command that names `.env` itself and contains `>` or a mutating word is still blocked even when harmless. Create such files with the Write tool, and avoid redirects in commands that name `.env`.
 
 ## Requirement tracking and regression rule
 
@@ -40,7 +49,7 @@ At the end of every prompt you complete (when your loop is finished, before repo
 3. **Run the entire test suite** (`uv run pytest`), not only the tests you touched. All must pass.
 4. **Report the results** in your closing message: tests added, changed or removed, and the format, lint, type-check and test results. If anything could not be run or failed, say so plainly. Until the tooling exists, say that instead.
 
-If a Stop hook for this gate is configured in `.claude/settings.json`, it enforces steps 2 and 3 automatically, but steps 1 and 4 still apply, because only you can judge which tests a change needs.
+A `Stop` hook ([.claude/hooks/quality_gate.py](.claude/hooks/quality_gate.py), configured in `.claude/settings.json`) enforces steps 2 and 3 automatically: it runs format, lint, mypy and the tests (skipping `integration`-marked ones) and blocks you from finishing until they pass. It does nothing until `pyproject.toml` and a test exist, and gives up with a warning after 3 consecutive failures in a session. Steps 1 and 4 still apply, because only you can judge which tests a change needs.
 
 ## The assignment (summary of task.md)
 
@@ -66,6 +75,8 @@ Build a personalised briefing generator:
 ## Protected files
 
 `.env`, `sources_06-05-25.json` and `task.md` must never be edited or deleted. This is enforced by deny rules plus a `PreToolUse` hook ([.claude/settings.json](.claude/settings.json), [.claude/hooks/protect_files.py](.claude/hooks/protect_files.py)). The settings file, `.claude/settings.local.json` and everything under `.claude/hooks/` are protected the same way. Do not try to work around the block.
+
+The hook scripts have regression tests ([tests/test_protect_hook.py](tests/test_protect_hook.py), [tests/test_quality_gate.py](tests/test_quality_gate.py)), which run with the normal suite.
 
 To unprotect the settings and hook files (done by the user, by hand):
 1. In `.claude/settings.json`, delete the deny rules for `/.claude/settings.json`, `/.claude/settings.local.json` and `/.claude/hooks/**` (the three `Edit(...)` and three `Write(...)` lines). Then make sure the last remaining entry in the `deny` array has no trailing comma, or the JSON is invalid.
