@@ -41,9 +41,8 @@ def run_hook(tool: str, **tool_input: str) -> int:
         ("Bash", {"command": 'bash -c "echo x > task.md"'}, BLOCK),
         ("PowerShell", {"command": "Remove-Item .env"}, BLOCK),
         ("PowerShell", {"command": "Set-Content task.md 'x'"}, BLOCK),
-        # Shell: reading is fine, and so is anything unrelated.
+        # Shell: reading non-secret protected files is fine, and so is anything unrelated.
         ("Bash", {"command": "cat task.md"}, ALLOW),
-        ("Bash", {"command": "grep -n foo .env"}, ALLOW),
         ("Bash", {"command": "rm -rf .venv"}, ALLOW),
         ("Bash", {"command": "uv run pytest"}, ALLOW),
         # .env.example is a placeholder, not .env.
@@ -58,8 +57,38 @@ def run_hook(tool: str, **tool_input: str) -> int:
         ),
         ("Bash", {"command": 'git commit -m "x $(rm task.md)"'}, BLOCK),
         ("Bash", {"command": 'git commit -m "ok" && rm task.md'}, BLOCK),
+        # Secrets: the Read and Grep tools may not open .env or .env.* (not placeholders).
+        ("Read", {"file_path": "C:/p/.env"}, BLOCK),
+        ("Read", {"file_path": "C:/p/.env.local"}, BLOCK),
+        ("Grep", {"pattern": "KEY", "path": "C:/p/.env"}, BLOCK),
+        ("Read", {"file_path": "C:/p/.env.example"}, ALLOW),
+        ("Read", {"file_path": "C:/p/task.md"}, ALLOW),
+        ("Grep", {"pattern": "KEY", "path": "C:/p/src"}, ALLOW),
+        # Secrets: shell commands may not read .env values...
+        ("Bash", {"command": "cat .env"}, BLOCK),
+        ("Bash", {"command": "grep KEY .env"}, BLOCK),
+        ("Bash", {"command": "sed -n 1p .env"}, BLOCK),
+        ("Bash", {"command": "python -c \"print(open('.env').read())\""}, BLOCK),
+        ("PowerShell", {"command": "Get-Content .env"}, BLOCK),
+        ("PowerShell", {"command": "Select-String KEY .env"}, BLOCK),
+        # ...but listing names, or testing that a key exists, is allowed.
+        ("Bash", {"command": "grep -oE '^[A-Za-z_]+' .env"}, ALLOW),
+        ("Bash", {"command": "grep -c OPENAI_API_KEY .env"}, ALLOW),
+        ("Bash", {"command": "grep -q OPENAI_API_KEY .env"}, ALLOW),
+        ("Bash", {"command": "cat .env.example"}, ALLOW),
+        # The names-only form cannot be chained into a real read.
+        ("Bash", {"command": "grep -oE '^[A-Za-z_]+' .env; cat .env"}, BLOCK),
+        ("Bash", {"command": "grep -c KEY .env | cat"}, BLOCK),
+        # Secrets: printing secret environment variables is blocked, using them is not.
+        ("Bash", {"command": "printenv"}, BLOCK),
+        ("Bash", {"command": "env"}, BLOCK),
+        ("Bash", {"command": "echo $OPENAI_API_KEY"}, BLOCK),
+        ("PowerShell", {"command": "Get-ChildItem Env:"}, BLOCK),
+        ("PowerShell", {"command": "Write-Host $env:OPENAI_API_KEY"}, BLOCK),
+        ("Bash", {"command": 'curl -H "Authorization: Bearer $OPENAI_API_KEY" https://x'}, ALLOW),
+        ("Bash", {"command": "echo $HOME"}, ALLOW),
         # Other tools are not inspected.
-        ("Read", {"file_path": "C:/p/.env"}, ALLOW),
+        ("Glob", {"pattern": "**/.env"}, ALLOW),
     ],
 )
 def test_hook_decision(tool: str, tool_input: dict[str, str], expected: int) -> None:

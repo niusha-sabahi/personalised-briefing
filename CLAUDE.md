@@ -13,7 +13,7 @@ Commands (all through uv; if `uv` is not on PATH, use `python -m uv`):
 - `uv run pytest --cov`: full test suite.
 - `uv run briefing`: serve the API on http://127.0.0.1:8000.
 
-Gotcha: the protect hook matches shell commands loosely (best-effort). `.env.example` and the text of `git commit -m` messages are exempt, but a command that names `.env` itself and contains `>` or a mutating word is still blocked even when harmless. Create such files with the Write tool, and avoid redirects in commands that name `.env`.
+Gotcha: the protect hook matches shell commands loosely (best-effort). `.env.example` and the text of `git commit -m` messages are exempt, but a command that names `.env` itself and contains `>` or a mutating word is still blocked even when harmless. The hook also blocks reading `.env` or `.env.*` (other than the placeholders) and printing secret environment variables. Create such files with the Write tool, and avoid redirects in commands that name `.env`.
 
 ## Requirement tracking and regression rule
 
@@ -70,7 +70,14 @@ Build a personalised briefing generator:
 
 ## Secrets
 
-`.env` holds `OPENAI_API_KEY` and is gitignored. Never print or commit it. The `.gitignore` also covers `.venv/`, `__pycache__/` and `.idea/`.
+`.env` holds `OPENAI_API_KEY` and is gitignored. The `.gitignore` also covers `.venv/`, `__pycache__/` and `.idea/`.
+
+Never read the values of secrets. This applies to `.env` and to any other file, variable or output that may hold a key, token or password:
+- Do not open `.env` with the Read tool, or `cat`, `head`, `type`, `Get-Content` or similar, and do not print environment variables that hold secrets (no `printenv`, `env`, `echo $OPENAI_API_KEY`, `Get-ChildItem Env:`).
+- If you need to know which variables exist, read the names from `.env.example` and the `Settings` class, which list every one. Do not inspect `.env` at all: the `Read(.env)` deny rule and the protect hook block the Read and Grep tools and shell commands that read it, and that includes a names-only `grep`. To confirm that a key is actually set, ask the user or run the app, and do not try another route to the file.
+- Never put a secret value in code, tests, logs, error messages, commit messages, README examples, or your replies. Use placeholders such as `your-key-here` (see `.env.example`).
+- The application reads the key itself through `Settings` (`SecretStr`). Tests use fake values like `sk-test-secret`. Live-API checks run through the app or the opt-in integration test, never by you handling the key.
+- If a secret value is ever exposed (for example in tool output), tell the user straight away so they can rotate it, and do not repeat it.
 
 ## Protected files
 

@@ -12,13 +12,14 @@
       "Edit(/.claude/hooks/**)",
       "Write(/.claude/settings.json)",
       "Write(/.claude/settings.local.json)",
-      "Write(/.claude/hooks/**)"
+      "Write(.claude/hooks/**)",
+      "Read(.env)"
     ]
   },
   "hooks": {
     "PreToolUse": [
       {
-        "matcher": "Edit|Write|MultiEdit|NotebookEdit|Bash|PowerShell",
+        "matcher": "Edit|Write|MultiEdit|NotebookEdit|Bash|PowerShell|Read|Grep",
         "hooks": [
           {
             "type": "command",
