@@ -1,0 +1,31 @@
+{
+  "permissions": {
+    "deny": [
+      "Edit(.env)",
+      "Edit(sources_06-05-25.json)",
+      "Edit(task.md)",
+      "Edit(/.claude/settings.json)",
+      "Edit(/.claude/settings.local.json)",
+      "Edit(/.claude/hooks/**)",
+      "Write(.env)",
+      "Write(sources_06-05-25.json)",
+      "Write(task.md)",
+      "Write(/.claude/settings.json)",
+      "Write(/.claude/settings.local.json)",
+      "Write(/.claude/hooks/**)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit|NotebookEdit|Bash|PowerShell",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"$CLAUDE_PROJECT_DIR/.claude/hooks/protect_files.py\""
+          }
+        ]
+      }
+    ]
+  }
+}

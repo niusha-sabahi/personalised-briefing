@@ -27,6 +27,15 @@ Build a personalised briefing generator:
 
 `.env` holds `OPENAI_API_KEY` and is gitignored. Never print or commit it. The `.gitignore` also covers `.venv/`, `__pycache__/` and `.idea/`.
 
+## Protected files
+
+`.env`, `sources_06-05-25.json` and `task.md` must never be edited or deleted. This is enforced by deny rules plus a `PreToolUse` hook ([.claude/settings.json](.claude/settings.json), [.claude/hooks/protect_files.py](.claude/hooks/protect_files.py)). The settings file, `.claude/settings.local.json` and everything under `.claude/hooks/` are protected the same way. Do not try to work around the block.
+
+To unprotect the settings and hook files (done by the user, by hand):
+1. In `.claude/settings.json`, delete the deny rules for `/.claude/settings.json`, `/.claude/settings.local.json` and `/.claude/hooks/**` (the three `Edit(...)` and three `Write(...)` lines). Then make sure the last remaining entry in the `deny` array has no trailing comma, or the JSON is invalid.
+2. In `.claude/hooks/protect_files.py`, replace the `PROTECTED_PATHS` tuple with `PROTECTED_PATHS = ()`. Keep the name defined.
+3. Restart the session so the changes load.
+
 ## Environment notes
 
 - Windows with PowerShell; the Bash tool is also available.
