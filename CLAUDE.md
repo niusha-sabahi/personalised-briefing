@@ -12,6 +12,7 @@ Commands (all through uv; if `uv` is not on PATH, use `python -m uv`):
 - `uv run mypy src`: type check.
 - `uv run pytest --cov`: full test suite.
 - `uv run briefing`: serve the API on http://127.0.0.1:8000.
+- `uv run briefing dates [--only kept|excluded]`: audit the publication date, the rule that found it, and the keep/drop decision for every source. Re-run it after any change to cleaning or date rules and spot-check the output.
 
 Gotcha: the protect hook matches shell commands loosely (best-effort). `.env.example` and the text of `git commit -m` messages are exempt, but a command that names `.env` itself and contains `>` or a mutating word is still blocked even when harmless. The hook also blocks reading `.env` or `.env.*` (other than the placeholders) and printing secret environment variables. Create such files with the Write tool, and avoid redirects in commands that name `.env`.
 
@@ -63,6 +64,46 @@ Build a personalised briefing generator:
 - **Recency rule:** only use sources published no more than 1 month before the newest source date (6 May 2025, so on or after ~6 Apr 2025). Sources have no date field; the date has to be derived from the URL path or the text.
 - **Extension:** after the briefing app works, write an [Agent Skill](https://agentskills.io/home) that lets a coding agent test the application.
 - **Deliverables:** README with run instructions, plain Python (no notebooks), private GitHub repo.
+
+## Architecture and development stages
+
+**Design.** An offline, cached *build* step and a *serve* step:
+```
+build:  sources.json -> load + dedupe -> clean -> extract date -> recency filter
+        -> embed (cached) -> multi-label topic tags
+serve:  persona topics -> select top-k tagged sources -> extract relevant passages
+        -> LLM returns structured JSON -> render Markdown + validate citations
+```
+- Pure core (`sources`, `tagging`, `retrieval`, citation validation: no I/O). Only `embeddings` and `generation` talk to OpenAI, behind small interfaces that tests replace with fakes.
+- Topics and personas are data (`topics.yaml`, `personas.yaml`), validated at startup. A persona is only a list of topic ids.
+- Dates come from an ordered, auditable pipeline: URL path, then a labelled "Published" date in the text, then the first full date near the top of the text. Each result records which rule matched. Sources with no date are excluded (M4).
+- The tagging threshold is calibrated from the real score distribution, not guessed.
+- *Confirmed by the user:* (a) select relevant **passages** within the chosen sources and send only those to the model (M8), which extends M3.2 with passage embeddings for selected sources only (cached); (b) the model returns **structured JSON** (sections, bullets, passage ids) and our code renders the Markdown and the Sources list, so every citation maps to a real source (M7, S14). A bullet citing an unknown passage id is dropped.
+- Frontend: one static page served by FastAPI, rendered with `marked` and sanitised with `DOMPurify` (S8), with no build step.
+
+**Stage 1 result:** 273 entries become 268 unique URLs; 104 pass the recency filter (84 have no determinable date, the rest are older than 2025-04-06). Date rules, strongest first: full date in the URL, year-month in the URL (resolved to a day from the text when possible; a URL month beats a text label), "Published/Posted/Released" label, "Updated/Last update" label, first date near the top of the text. Dates after 2025-05-06 are ignored (events, deadlines). Slash dates (04/05/2025) are not supported because day-first and month-first are ambiguous. A month-only date inside the cutoff month (April 2025) is excluded because the day is unknown. "Published" is what M4 asks for, so a page published long ago but updated recently is judged by its published date when one is labelled.
+
+**Data facts that shape the design** (checked 2026-11-06): 273 sources, 5 duplicate URLs; median text about 15k characters, max 375k (so truncate or chunk before embedding); only 39 URLs carry a date, 157 sources have a full date near the top of the text, and 47 have no date anywhere (excluded by M4); topics are mixed (education, EU policy, drugs.com and others), so most sources will stay untagged.
+
+**Stages.** Work in this order. Each stage ends with the quality gate green, requirement statuses updated in REQUIREMENTS.md, and the README updated. Update the Status column below as stages finish.
+
+| # | Stage | Requirements | Status |
+|---|---|---|---|
+| 0 | Scaffold, tooling, hooks | M12, S2, S3, S5, S6 | Done |
+| 1 | Data foundation: load, dedupe, clean, date extraction, recency filter, dates audit report (no API needed; riskiest, so first) | M2, M4, S10, part of S16 | Done (M4 complete; truncating or chunking text to the embedding limit, part of S10, moves to stage 3) |
+| 2 | Taxonomy and personas: YAML files and validation (independent of stage 1) | M3.1, part of S9, S16, S18 | Not started |
+| 3 | Embeddings, disk cache, tagging, threshold calibration (first live API calls) | M3.2, M3.3, S11, S12 | Not started |
+| 4 | Retrieval: persona selection and passage extraction (pure logic) | M3.4, part of M8 | Not started |
+| 5 | Generation: prompt, structured output, rendering, citation validation, injection defence | M5, M6, M7, M8, S8, S13, S14 | Not started |
+| 6 | API: endpoints, in-memory cache, error mapping, logging | M9, S9, S13, S15, S17 | Not started |
+| 7 | Frontend | M10, S8 | Not started |
+| 8 | Hardening: live integration test, data-integrity tests, CI and pre-commit verified, key-leak check | S18, S19, S4, S7, M11 | Not started |
+| 9 | Agent Skill | M15 | Not started |
+| 10 | Delivery: private repo, push, fresh-clone check; then optional C items (Docker, task aliases) | M14, M16, S20, C1, C5 | Not started |
+
+**Decisions made**
+- Generation model id is `gpt-5.6-luna` (confirmed by the user). It has **no temperature setting**: never send `temperature` (or other sampling parameters) to it. Keep generation deterministic by other means (structured output, fixed prompts, stable ordering), and make any generation parameter optional in config.
+- The user handles API-key and live-API setup. You never read the key (see Secrets); the first live embedding build in stage 3 is run by the user.
 
 ## Data
 

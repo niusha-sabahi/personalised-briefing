@@ -8,14 +8,14 @@ Status: `[ ]` not started · `[~]` in progress or partly done · `[x]` complete 
 
 **Briefing behaviour**
 - [ ] M1. Generate one briefing per persona: Healthcare Policy Analyst (USA) and Tech Startup Founder (London). A persona is data: an id, a position, a location, and a list of topic ids (see M3.1). A persona's briefing is built from sources tagged with those topics.
-- [ ] M2. Use only sources from `sources_06-05-25.json`. Do not fetch anything else.
+- [~] M2. Use only sources from `sources_06-05-25.json`. Do not fetch anything else.
 - [ ] M3. Sources are embedded and organised by topic tag, not by persona. Embeddings and tags never reference a persona, so a new persona only needs a new list of topic ids.
   - [ ] M3.1. Topic taxonomy: a committed data file (for example `topics.yaml`) where each topic has a stable `id`, a `label`, and a short `description` used for embedding. It must include at least these topics, taken from the persona interests in task.md: healthcare reform, public health data, telemedicine, pharmaceutical innovation, health equity, government policy updates, artificial intelligence, venture capital, startup funding, SaaS trends, product management. Extra topics are allowed and are not limited to these.
-  - [ ] M3.2. Embed each source (once, using cleaned text) and each topic description with an OpenAI embedding model.
+  - [ ] M3.2. Embed each source (once, using cleaned text) and each topic description with an OpenAI embedding model. For the sources selected for a briefing, also embed their passages (paragraph-sized chunks, cached) so only passages related to the persona's topics reach the model (M8).
   - [ ] M3.3. Multi-label tagging: a source gets every topic whose cosine similarity is at or above a configured threshold, capped at a configured maximum number of tags per source. A source may have several tags or none. Each tag keeps its similarity score. Untagged sources are never used in a briefing.
   - [ ] M3.4. For a persona, candidate sources are those carrying at least one of the persona's topic ids and passing the recency filter (M4). Rank them by their best score among the persona's topics, with ties broken by URL, and select the top-k. Selection must include a per-topic minimum where available, so one topic cannot crowd out the others.
-- [ ] M4. Recency filter: exclude any source with a publication date before 2025-04-06 (one month before 2025-05-06). Derive the date from the URL path or the text, and document the rule used. Sources with no determinable date are excluded.
-- [ ] M5. Generate the briefing with the most suitable OpenAI embedding model, using only the selected sources as context.
+- [x] M4. Recency filter: exclude any source with a publication date before 2025-04-06 (one month before 2025-05-06). Derive the date from the URL path or the text, and document the rule used. Sources with no determinable date are excluded.
+- [ ] M5. Generate the briefing with the configured OpenAI generation model (`gpt-5.6-luna`), using only the selected passages as context. The model returns structured JSON (sections by topic, bullets, each citing passage ids); the application renders the Markdown and the Sources list itself, so every link comes from the real source table.
 - [ ] M6. Output is Markdown.
 - [ ] M7. Every claim in the briefing links to a source, and a "Sources" section lists title and URL for each source used. Every cited URL must exist in the input file.
 - [ ] M8. Content must be relevant to the persona, and a briefing contains no off-topic text.
@@ -23,6 +23,7 @@ Status: `[ ]` not started · `[~]` in progress or partly done · `[x]` complete 
   - A source that is only partly about the persona's topics may still be used, but only its related parts appear in the briefing. Unrelated parts of the article (other subjects, ads, navigation, sidebars, promotional or boilerplate text) are left out.
   - The generation prompt states this rule explicitly: use only the passages relevant to the persona's topics, and omit everything else from each source.
   - Every statement in a topic section must be traceable to a cited source passage that relates to that section's topic.
+  - Passages are chosen by similarity to the persona's topic descriptions before generation, so unrelated text never reaches the model. A bullet that cites an unknown passage id is dropped.
 
 **Application**
 - [~] M9. Backend is a FastAPI server exposing at least: `GET /health`, `GET /topics` (the taxonomy), and an endpoint that returns a persona's briefing as Markdown (for example `GET /briefings/{persona_id}`, with `persona_id` being `healthcare-policy-analyst` or `tech-founder`).
@@ -63,17 +64,17 @@ Status: `[ ]` not started · `[~]` in progress or partly done · `[x]` complete 
 - [ ] S9. Pydantic models validate request and response shapes, and validate the topic and persona data files at startup (unique topic ids, every persona topic id exists in the taxonomy). Path parameters are restricted to known personas, and unknown ones return 404.
 
 **Correctness and robustness**
-- [ ] S10. Clean scraped text before embedding: strip nav links, `[iframe](javascript:false)` and boilerplate, collapse whitespace, and truncate or chunk to the embedding token limit. Skip entries with empty or tiny text.
+- [~] S10. Clean scraped text before embedding: strip nav links, `[iframe](javascript:false)` and boilerplate, collapse whitespace, and truncate or chunk to the embedding token limit. Skip entries with empty or tiny text.
 - [ ] S11. Cache embeddings on disk (sources keyed by URL and content hash, topics keyed by id and description hash) so repeat runs make no API calls. Tags are recomputed from cached embeddings, so changing the threshold or adding a topic only embeds the new topic. Cache briefings in memory per persona.
-- [ ] S12. Deterministic behaviour where possible: fixed top-k, threshold and tag cap, stable sort (ties broken by URL), `temperature` set to the lowest value the model supports, and embeddings batched in a fixed order.
+- [ ] S12. Deterministic behaviour where possible: fixed top-k, threshold and tag cap, stable sort (ties broken by URL), no sampling parameters sent to the generation model (`gpt-5.6-luna` has no temperature setting), and embeddings batched in a fixed order.
 - [ ] S13. Handle OpenAI errors: timeouts, rate limits (retry with backoff), and auth failures. Return 502 or 503 with a clear message, never a stack trace. Handle the case where no sources pass the filters by returning a clear "no relevant recent sources" response.
 - [ ] S14. Post-generation check that every `[n]` citation or URL in the briefing maps to a selected source. Drop or flag any that do not.
 - [ ] S15. Logging with the standard `logging` module, with levels set by config.
 
 **Testing**
-- [ ] S16. Unit tests with the OpenAI client mocked, covering: date extraction (URL form, text form, missing, malformed), the cutoff boundary (2025-04-05 excluded, 2025-04-06 included), text cleaning, multi-label tagging (several tags, no tags, threshold boundary, tag cap), persona selection from tags (union across topics, per-topic minimum, top-k, tie-break), citation validation, and taxonomy and persona validation (duplicate topic id, unknown topic id in a persona).
+- [~] S16. Unit tests with the OpenAI client mocked, covering: date extraction (URL form, text form, missing, malformed), the cutoff boundary (2025-04-05 excluded, 2025-04-06 included), text cleaning, multi-label tagging (several tags, no tags, threshold boundary, tag cap), persona selection from tags (union across topics, per-topic minimum, top-k, tie-break), citation validation, and taxonomy and persona validation (duplicate topic id, unknown topic id in a persona).
 - [ ] S17. API tests with FastAPI `TestClient` covering: `/health`, a valid persona, an unknown persona (404), OpenAI failure (502 or 503), and the empty-results case.
-- [ ] S18. Data-integrity tests over the real JSON: no selected source predates the cutoff, and every required topic in M3.1 exists in the taxonomy. With the live API (opt-in), each required topic has at least one tagged source.
+- [~] S18. Data-integrity tests over the real JSON: no selected source predates the cutoff, and every required topic in M3.1 exists in the taxonomy. With the live API (opt-in), each required topic has at least one tagged source.
 - [ ] S19. One opt-in integration test (marked, skipped without a key) that runs the whole pipeline against the live API and checks that the output is non-empty Markdown with valid references.
 
 **Documentation**
