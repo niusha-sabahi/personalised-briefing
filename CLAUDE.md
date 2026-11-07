@@ -4,14 +4,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Status
 
-The project scaffold is in place: a uv project with a `src/briefing/` package (module placeholders plus `config` and a `/health` API), ruff, mypy (strict) and pytest configured, a pre-commit hook (run `uv run pre-commit install` once per clone; it runs ruff format and check, mypy and the tests on every commit) and a CI workflow (written, not yet run on GitHub). Stage 1 (data foundation) is done; the rest of the pipeline is not implemented yet. See [README.md](README.md) and REQUIREMENTS.md for progress.
+A uv project with a `src/briefing/` package, ruff, mypy (strict) and pytest configured, a pre-commit hook (run `uv run pre-commit install` once per clone; it runs ruff format and check, mypy and the tests on every commit) and a CI workflow (written, not yet run on GitHub). Stages 0 to 6 are done offline (data, taxonomy, embeddings and tagging, retrieval, generation, API) and tested with fake models; nothing has run against the real OpenAI models yet because the key expired (see the README checklist). The frontend, hardening, the Agent Skill and delivery remain. See [README.md](README.md) and REQUIREMENTS.md for progress.
 
 Commands (all through uv; if `uv` is not on PATH, use `python -m uv`):
 - `uv sync`: install into `.venv`.
 - `uv run ruff format` and `uv run ruff check --fix`: format and lint (the `D` docstring rules are on).
 - `uv run mypy src`: type check.
 - `uv run pytest --cov`: full test suite.
-- `uv run briefing`: serve the API on http://127.0.0.1:8000.
+- `uv run briefing`: serve the API on http://127.0.0.1:8000 (needs the settings in `.env`; checks them and the topic and persona files first, then starts `briefing.api:create_app` as a uvicorn factory). Endpoints: `/health`, `/topics`, `/personas`, `/briefings/{persona_id}` (Markdown, or `?format=json`).
 - `uv run briefing topics`: validate `topics.yaml` and `personas.yaml` and show which topics each persona follows (exits 1 with a message if invalid).
 - `uv run briefing tags [--threshold X]`: embed the usable sources and topics (cached in `.cache/embeddings`) and print score quantiles, a threshold sweep and the top sources per topic, to calibrate `TAGGING_THRESHOLD`. Calls the OpenAI API, so the user runs it, not you.
 - `uv run briefing dates [--only kept|excluded]`: audit the publication date, the rule that found it, and the keep/drop decision for every source. Re-run it after any change to cleaning or date rules and spot-check the output.
@@ -95,6 +95,8 @@ serve:  persona topics -> select top-k tagged sources -> extract relevant passag
 
 **Stage 5 result:** `generation.py`: `SYSTEM_PROMPT` (fixed rules), `build_prompt` (reader, topic ids, passages in `<passage id topic>` blocks with `<` escaped), `Generator` protocol, `OpenAIGenerator` (Responses API `responses.parse` with `BriefingDraft`, `store=False`, no sampling parameters, error if unparsed), `generate_briefing` (raises `NoRelevantSourcesError` before any model call when there are no passages; `GenerationError` when nothing survives validation or a stray URL is found). `rendering.py` (pure): `validate_draft` (unknown ids removed; a bullet is dropped without a valid citation, without a cited passage on its section's topic, with empty text, or in an unknown section; sections in persona order), `plain_text` and `_escape` (model text can never carry links, headings, lists or HTML), `render_markdown` (citations `[n]` link to the source table, numbered by first citation, only cited sources listed), `foreign_urls` (final guard, S14). Draft and result models are in `models.py`. The same-topic citation rule is strict and untested against the real model: if live drop rates are high, relax it (README checklist, step 5).
 
+**Stage 6 result:** `service.py` (`BriefingService.from_settings` loads and cleans the sources; the first `briefing_for` call tags the corpus and the result is kept; briefings are cached per persona in memory, failures are not cached, one lock serialises generation; `make_openai_client` sets the timeout and retries from settings, `make_embedder` adds the disk cache) and `api.py` (`create_app(settings=None, *, embedder=None, generator=None)` is the app factory, so tests inject fakes and there is no module-level `app`; startup raises `TaxonomyError` on bad data files). Error mapping lives in one table (`_ERROR_MAP`): `NoRelevantSourcesError` 404, `GenerationError` 502, rate limit and connection or timeout 503, auth, permission and other OpenAI errors 502, anything else 500; handlers log the exception class and provider status only, never the message. An unknown persona is a 404 that lists the known ids. The shared test fixtures are in `tests/conftest.py` (a four-source corpus, a three-topic taxonomy, `KeywordEmbedder`, and `EchoGenerator`, which cites every passage in the prompt); API tests build the app with them and need no key.
+
 **Stages.** Work in this order. Each stage ends with the quality gate green, requirement statuses updated in REQUIREMENTS.md, and the README updated. Update the Status column below as stages finish.
 
 | # | Stage | Requirements | Status |
@@ -105,7 +107,7 @@ serve:  persona topics -> select top-k tagged sources -> extract relevant passag
 | 3 | Embeddings, disk cache, tagging, threshold calibration (first live API calls) | M3.2, M3.3, S11, S12 | Code done and tested offline; the user's first live `briefing tags` run and the threshold choice are pending |
 | 4 | Retrieval: persona selection and passage extraction (pure logic) | M3.4, part of M8 | Done offline (M3.4 complete; `PASSAGE_THRESHOLD` and `MAX_PASSAGES_PER_SOURCE` are placeholders until calibrated with the key) |
 | 5 | Generation: prompt, structured output, rendering, citation validation, injection defence | M5, M6, M7, M8, S8, S13, S14 | Done offline with a fake model (M6, M7, S14 complete; M5, M8 and the prompt's quality need the live model) |
-| 6 | API: endpoints, in-memory cache, error mapping, logging | M9, S9, S13, S15, S17 | Not started |
+| 6 | API: endpoints, in-memory cache, error mapping, logging | M9, S9, S13, S15, S17 | Done offline (all five complete; real-OpenAI behaviour such as latency against the timeout is in the README checklist) |
 | 7 | Frontend | M10, S8 | Not started |
 | 8 | Hardening: live integration test, data-integrity tests, CI and pre-commit verified, key-leak check | S18, S19, S4, S7, M11 | Not started |
 | 9 | Agent Skill | M15 | Not started |

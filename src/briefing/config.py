@@ -1,9 +1,10 @@
 """Application settings, loaded from the environment or a local `.env` file."""
 
+import logging
 from datetime import date
 from pathlib import Path
 
-from pydantic import Field, SecretStr
+from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 DEFAULT_SOURCES_PATH = Path("sources_06-05-25.json")
@@ -46,4 +47,17 @@ class Settings(BaseSettings):
     passage_threshold: float = Field(default=0.30, ge=-1.0, le=1.0)
     max_passages_per_source: int = Field(default=4, ge=1)
 
+    # The OpenAI client retries rate limits, timeouts and server errors with backoff (S13).
+    openai_timeout_seconds: float = Field(default=60.0, gt=0)
+    openai_max_retries: int = Field(default=3, ge=0)
+
     log_level: str = "INFO"
+
+    @field_validator("log_level")
+    @classmethod
+    def _known_log_level(cls, value: str) -> str:
+        """Accept any standard logging level name, in any case."""
+        level = value.upper()
+        if level not in logging.getLevelNamesMapping():
+            raise ValueError(f"unknown log level {value!r}")
+        return level

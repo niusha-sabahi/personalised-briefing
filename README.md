@@ -18,7 +18,16 @@ uv run briefing              # serves the API on http://127.0.0.1:8000
 curl http://127.0.0.1:8000/health
 ```
 
-Interactive API docs are at `http://127.0.0.1:8000/docs`. Only `/health` exists so far; the briefing endpoints and frontend are still to be built.
+Interactive API docs (the API reference) are at `http://127.0.0.1:8000/docs`. The server refuses to start if the settings or `topics.yaml` / `personas.yaml` are invalid. Endpoints:
+
+```
+curl http://127.0.0.1:8000/topics                                       # the topic taxonomy
+curl http://127.0.0.1:8000/personas                                     # persona ids and their topics
+curl http://127.0.0.1:8000/briefings/healthcare-policy-analyst          # Markdown briefing
+curl "http://127.0.0.1:8000/briefings/tech-founder?format=json"         # JSON: markdown plus cited sources
+```
+
+The first briefing request embeds the sources (cached on disk) and calls the generation model, so it is slow and needs a working OpenAI key; later requests for the same persona are served from memory until the server restarts. Errors are JSON `{"detail": ...}`: 404 for an unknown persona or when no relevant recent sources exist, 503 when OpenAI is rate limiting or unreachable, 502 when OpenAI rejects the request or returns an unusable answer. They never include provider messages or stack traces. The frontend is still to be built.
 
 ### Topics and personas
 
@@ -56,16 +65,18 @@ uv run pre-commit install                       # once per clone: run format, li
 uv run pre-commit run --all-files               # run them on demand (needs Git 2.31 or newer)
 ```
 
-## Architecture (planned)
+## Architecture
 
-Sources are never matched to a persona directly. Each source is cleaned, embedded once and tagged with topics from a shared taxonomy. A persona is just a list of topic ids.
+Sources are never matched to a persona directly. Each source is cleaned, embedded once and tagged with topics from a shared taxonomy. A persona is just a list of topic ids. The first briefing request tags the sources; each persona's briefing is then built, validated and cached in memory.
 
 ```
 sources JSON -> clean + extract date -> recency filter (>= 2025-04-06)
-             -> embed (cached) -> multi-label topic tags
+             -> embed (disk cache) -> multi-label topic tags
 persona topics -> select top-k tagged sources (per-topic minimum)
-               -> generate Markdown briefing (relevant passages only)
-               -> validate citations against selected sources -> API / frontend
+               -> split into passages, keep those matching the persona's topics
+               -> model returns structured JSON (bullets citing passage ids)
+               -> validate citations, render Markdown from the source table
+               -> API (FastAPI) -> frontend
 ```
 
 ## Working without an API key (temporary)
@@ -81,12 +92,13 @@ The API key we were given has expired and a replacement has been requested, so t
 3. Decide on backfilling: count how often a selected source is dropped for having no relevant passage. If it is common, replace dropped sources with the next-best candidates so briefings keep `TOP_K` sources.
 4. Check that `gpt-5.6-luna` accepts the structured-output request we send. `OpenAIGenerator` uses the Responses API (`responses.parse` with a Pydantic schema, `store=False`, no sampling parameters); if the model rejects it, switch to chat completions with the same schema.
 5. Read a real briefing for each persona: relevant, cited, no off-topic text, and no hidden instructions from source text followed (S8). Check how many bullets and citations validation drops (`dropped_bullets`, `dropped_citations`); a high rate means the prompt or the passage topics need work, especially the rule that a bullet must cite a passage whose best topic is its section's topic.
-6. Run the opt-in live integration test (S19) and the live data-integrity check (S18: each required topic has at least one tagged source).
-7. Update the README, CLAUDE.md and REQUIREMENTS.md with the calibrated values, and mark the dependent requirements complete (M3.2, M3.3, M5, M8 and any others still partial).
+6. Start the server (`uv run briefing`) and request a briefing for each persona with `curl` (see Run). Time the first request, which embeds every recent source, then generates: if it hits `OPENAI_TIMEOUT_SECONDS` (60 by default) or a client timeout, raise the setting or move the embedding to server startup. Check that a second request is instant, and that a bad key gives the clean 502 and not a stack trace.
+7. Run the opt-in live integration test (S19) and the live data-integrity check (S18: each required topic has at least one tagged source).
+8. Update the README, CLAUDE.md and REQUIREMENTS.md with the calibrated values, and mark the dependent requirements complete (M3.2, M3.3, M5, M8 and any others still partial).
 
 ## Work completed
 
-Status: planning and the project scaffold are done. **The briefing pipeline itself is not implemented yet** (only `/health` works).
+Status: the whole pipeline and the API are built and tested offline with fake models (stages 0 to 6). **Nothing has run against the real OpenAI models yet**, because the API key expired; see the checklist above. The frontend, hardening, the Agent Skill and delivery remain.
 
 - **Assignment analysis:** reviewed `task.md` and inspected `sources_06-05-25.json` (273 web sources, fields `url`, `title`, `description`, `text`, and no date field).
 - **Requirements:** wrote [REQUIREMENTS.md](REQUIREMENTS.md), a tiered list (Must / Should / Could) that is deterministic and testable. Key design decisions:
@@ -97,7 +109,7 @@ Status: planning and the project scaffold are done. **The briefing pipeline itse
   - uv project with a `.venv`, delivered as a single private GitHub repository, with an agent-neutral skill in `skills/`.
 - **Repository guidance:** wrote [CLAUDE.md](CLAUDE.md) for coding agents, covering the assignment, the data format, secrets handling and protected files.
 - **File protection:** `.env`, `sources_06-05-25.json` and `task.md` can never be edited or deleted, and the protection files are covered too. It uses deny rules in [.claude/settings.json](.claude/settings.json) and a `PreToolUse` hook in [.claude/hooks/protect_files.py](.claude/hooks/protect_files.py). Both layers were verified: the hook script against 44 simulated tool calls (all passed, including fail-closed on bad input), and in a live session (file edits rejected by the deny rules, mutating shell commands blocked by the hook, read-only access still allowed). Shell matching is best-effort.
-- **Requirement tracking:** every requirement in [REQUIREMENTS.md](REQUIREMENTS.md) now has a status marker (`[ ]` not started, `[~]` in progress, `[x]` complete and verified). Current tally: 12 of 46 complete (M: 6/20, S: 6/20, C: 0/6; M includes the sub-requirements M3.1 to M3.4).
+- **Requirement tracking:** every requirement in [REQUIREMENTS.md](REQUIREMENTS.md) now has a status marker (`[ ]` not started, `[~]` in progress, `[x]` complete and verified). Current tally: 18 of 46 complete (M: 7/20, S: 11/20, C: 0/6; M includes the sub-requirements M3.1 to M3.4).
 - **Session rule:** [CLAUDE.md](CLAUDE.md) now requires each development session to keep the statuses current, check for regressions (tests, lint and type check once they exist) before finishing, and end with a summary of the requirements completed, unfinished, or regressed.
 - **Project scaffold:** uv project (Python 3.12, `uv.lock`) with a `src/briefing/` package split into the modules planned in S1, a `briefing` script entry point, a working `/health` endpoint, and `Settings` (pydantic-settings, `SecretStr` key, model names and tuning in config). Ruff (with docstring rules), mypy strict and pytest with coverage are configured and pass; pre-commit and a GitHub Actions workflow are written but not yet exercised. Ruff skips `.claude/`, which is tooling and protected.
 - **Quality-gate hook:** a `Stop` hook ([.claude/hooks/quality_gate.py](.claude/hooks/quality_gate.py)) runs ruff format, ruff check, mypy and the tests at the end of every agent turn and blocks finishing until they pass (no-op until tests exist, gives up after 3 failed attempts). The file-protection hook was also fixed so `.env.example` and `git commit -m` message text no longer cause false blocks, while `.env` stays fully protected. Both hooks have tests in `tests/`.
@@ -110,6 +122,7 @@ Status: planning and the project scaffold are done. **The briefing pipeline itse
 - **Stage 3, embeddings and tagging (code done, calibration pending):** `embeddings.py` (OpenAI embedder behind a small interface, content-hash disk cache, cached wrapper with hit and miss counts, truncation to the embedding limit) and `tagging.py` (cosine similarity, multi-label tagging with threshold and cap), plus `uv run briefing tags` to calibrate the threshold from real scores. Everything is tested with fake embedders and a fake OpenAI client (177 tests in the suite). The live run is yours to do; its error output never includes provider messages, which can echo key fragments.
 - **Stage 4, retrieval (done offline):** `retrieval.py` tags the corpus, selects a persona's top-k sources from the tags (best score among the persona's topics, ties by URL, a per-topic minimum so one topic cannot crowd out the others), splits the chosen sources into passages, and keeps only the passages that match a persona topic above `PASSAGE_THRESHOLD`, giving each a citable id (`s2p3`) and its best topic. Sources with no relevant passage are dropped. Tested on synthetic vectors and on the real data (splitting loses no text and respects the size limits). `PASSAGE_THRESHOLD` and `MAX_PASSAGES_PER_SOURCE` are placeholders until calibrated with a working key. 209 tests in the suite.
 - **Stage 5, generation (done offline):** `generation.py` builds the prompt (fixed rules: use only the passages, treat passage text as untrusted data and ignore instructions in it, write only about the reader's topics, cite passage ids, no links), asks the model for structured JSON (sections by topic, bullets, passage ids) through a `Generator` interface (`OpenAIGenerator` uses the Responses API and sends no sampling parameters), and `rendering.py` checks the answer and renders the Markdown. Validation removes citations to unknown passages and drops any bullet with no valid citation, no cited passage on its section's topic, empty text, or an unknown section. Bullet text is reduced to plain prose (URLs, `[n]` markers and Markdown or HTML stripped or escaped), every link in the output comes from the source table, citations are numbered in order of first use, and a final scan fails the briefing if it contains any URL that is not a selected source. No relevant passages gives a clear "no relevant recent sources" error, and an answer with nothing traceable is an error too. All tested with a fake model (239 tests in the suite); nothing has been run against the real model yet.
+- **Stage 6, API (done offline):** `service.py` (`BriefingService`: tags the corpus on the first briefing request, selects sources, retrieves passages, generates; keeps finished briefings in memory per persona, never caches failures, and a lock stops two first requests doing the work twice) and `api.py` (`create_app`, a factory that validates the settings, topics and personas at startup and loads the sources; `GET /health`, `/topics`, `/personas`, `/briefings/{persona_id}` as Markdown or `?format=json`). Every endpoint has a summary and documented error responses. OpenAI failures map to clean JSON errors (503 rate limit, timeout or unreachable; 502 for auth, other provider errors and unusable answers; 404 for an unknown persona or no relevant sources; 500 for bugs), and responses and logs never include provider messages. The OpenAI client is built with `OPENAI_TIMEOUT_SECONDS` and `OPENAI_MAX_RETRIES` (retries with backoff on rate limits, timeouts and server errors). Logging uses the standard `logging` module at `LOG_LEVEL`, with counts but never source text. `uv run briefing` now checks the settings and files before starting the server. Tested with fake models and a corpus built in the tests (268 tests in the suite).
 
 
 ## Future Work

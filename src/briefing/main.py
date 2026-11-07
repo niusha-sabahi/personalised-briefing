@@ -24,12 +24,11 @@ from briefing.config import (
 from briefing.embeddings import (
     CachedEmbedder,
     Embedder,
-    EmbeddingCache,
-    OpenAIEmbedder,
     source_embedding_text,
     topic_embedding_text,
 )
 from briefing.models import PreparedSource, Topic
+from briefing.service import make_embedder
 from briefing.sources import (
     MIN_CLEAN_CHARS,
     SourceDataError,
@@ -152,19 +151,35 @@ def tags_report(
 
 def _build_embedder(settings: Settings) -> CachedEmbedder:
     """Create the cached OpenAI embedder described by `settings`."""
-    client = openai.OpenAI(api_key=settings.openai_api_key.get_secret_value(), timeout=60.0)
-    cache = EmbeddingCache(settings.cache_path, settings.embedding_model)
-    return CachedEmbedder(OpenAIEmbedder(client, settings.embedding_model), cache)
+    return make_embedder(settings)
+
+
+def _load_settings() -> Settings:
+    """Read the settings, exiting with a short message that names what is missing or invalid."""
+    try:
+        return Settings()
+    except ValidationError as exc:
+        # Only field names are shown: an invalid value might be the secret itself.
+        names = ", ".join(dict.fromkeys(str(error["loc"][0]).upper() for error in exc.errors()))
+        print(f"Invalid settings ({names}). See .env.example.", file=sys.stderr)
+        raise SystemExit(1) from exc
+
+
+def _serve() -> None:
+    """Start the API server after checking the settings and the topic and persona files."""
+    settings = _load_settings()
+    try:
+        load_taxonomy(settings.topics_path, settings.personas_path)
+    except TaxonomyError as exc:
+        print(exc, file=sys.stderr)
+        raise SystemExit(1) from exc
+    # A factory, so the app is built (and the sources loaded) once in the server process.
+    uvicorn.run("briefing.api:create_app", factory=True, host="127.0.0.1", port=8000)
 
 
 def _run_tags(threshold: float | None) -> None:
     """Run `briefing tags`, turning setup and API failures into a short message."""
-    try:
-        settings = Settings()
-    except ValidationError as exc:
-        missing = ", ".join(str(error["loc"][0]).upper() for error in exc.errors())
-        print(f"Invalid settings ({missing}). See .env.example.", file=sys.stderr)
-        raise SystemExit(1) from exc
+    settings = _load_settings()
     try:
         taxonomy = load_taxonomy(settings.topics_path, settings.personas_path)
         prepared = prepare_sources(load_sources(settings.sources_path), settings.latest_date)
@@ -230,4 +245,4 @@ def run(argv: Sequence[str] | None = None) -> None:
             print(exc, file=sys.stderr)
             raise SystemExit(1) from exc
         return
-    uvicorn.run("briefing.api:app", host="127.0.0.1", port=8000)
+    _serve()

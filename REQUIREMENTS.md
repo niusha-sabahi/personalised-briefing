@@ -26,7 +26,7 @@ Status: `[ ]` not started · `[~]` in progress or partly done · `[x]` complete 
   - Passages are chosen by similarity to the persona's topic descriptions before generation, so unrelated text never reaches the model. A bullet that cites an unknown passage id is dropped.
 
 **Application**
-- [~] M9. Backend is a FastAPI server exposing at least: `GET /health`, `GET /topics` (the taxonomy), and an endpoint that returns a persona's briefing as Markdown (for example `GET /briefings/{persona_id}`, with `persona_id` being `healthcare-policy-analyst` or `tech-founder`).
+- [x] M9. Backend is a FastAPI server exposing at least: `GET /health`, `GET /topics` (the taxonomy), and an endpoint that returns a persona's briefing as Markdown (for example `GET /briefings/{persona_id}`, with `persona_id` being `healthcare-policy-analyst` or `tech-founder`).
 - [ ] M10. A minimal frontend (any framework) that selects a persona and renders the Markdown briefing.
 - [~] M11. The OpenAI key is read from the environment or `.env`. It is never committed or logged, and `.env` stays gitignored.
 
@@ -61,19 +61,19 @@ Status: `[ ]` not started · `[~]` in progress or partly done · `[x]` complete 
 - [x] S6. Settings are loaded with `pydantic-settings`: API key, model names, tagging threshold, max tags per source, top-k, per-topic minimum, cutoff date, and cache path. No hard-coded secrets or model names in code.
 - [~] S7. The key is wrapped as `SecretStr`. Logs and error responses never contain it. Check git history for a leaked key before pushing.
 - [~] S8. Source text is untrusted. The prompt separates instructions from source content and tells the model to ignore instructions found inside sources. Generated Markdown is sanitised or escaped when rendered in the frontend.
-- [~] S9. Pydantic models validate request and response shapes, and validate the topic and persona data files at startup (unique topic ids, every persona topic id exists in the taxonomy). Path parameters are restricted to known personas, and unknown ones return 404.
+- [x] S9. Pydantic models validate request and response shapes, and validate the topic and persona data files at startup (unique topic ids, every persona topic id exists in the taxonomy). Path parameters are restricted to known personas, and unknown ones return 404.
 
 **Correctness and robustness**
 - [x] S10. Clean scraped text before embedding: strip nav links, `[iframe](javascript:false)` and boilerplate, collapse whitespace, and truncate or chunk to the embedding token limit. Skip entries with empty or tiny text.
-- [~] S11. Cache embeddings on disk (sources keyed by URL and content hash, topics keyed by id and description hash) so repeat runs make no API calls. Tags are recomputed from cached embeddings, so changing the threshold or adding a topic only embeds the new topic. Cache briefings in memory per persona.
+- [x] S11. Cache embeddings on disk (sources keyed by URL and content hash, topics keyed by id and description hash) so repeat runs make no API calls. Tags are recomputed from cached embeddings, so changing the threshold or adding a topic only embeds the new topic. Cache briefings in memory per persona.
 - [~] S12. Deterministic behaviour where possible: fixed top-k, threshold and tag cap, stable sort (ties broken by URL), no sampling parameters sent to the generation model (`gpt-5.6-luna` has no temperature setting), and embeddings batched in a fixed order.
-- [ ] S13. Handle OpenAI errors: timeouts, rate limits (retry with backoff), and auth failures. Return 502 or 503 with a clear message, never a stack trace. Handle the case where no sources pass the filters by returning a clear "no relevant recent sources" response.
+- [x] S13. Handle OpenAI errors: timeouts, rate limits (retry with backoff), and auth failures. Return 502 or 503 with a clear message, never a stack trace. Handle the case where no sources pass the filters by returning a clear "no relevant recent sources" response.
 - [x] S14. Post-generation check that every `[n]` citation or URL in the briefing maps to a selected source. Drop or flag any that do not.
-- [ ] S15. Logging with the standard `logging` module, with levels set by config.
+- [x] S15. Logging with the standard `logging` module, with levels set by config.
 
 **Testing**
 - [~] S16. Unit tests with the OpenAI client mocked, covering: date extraction (URL form, text form, missing, malformed), the cutoff boundary (2025-04-05 excluded, 2025-04-06 included), text cleaning, multi-label tagging (several tags, no tags, threshold boundary, tag cap), persona selection from tags (union across topics, per-topic minimum, top-k, tie-break), citation validation, and taxonomy and persona validation (duplicate topic id, unknown topic id in a persona).
-- [ ] S17. API tests with FastAPI `TestClient` covering: `/health`, a valid persona, an unknown persona (404), OpenAI failure (502 or 503), and the empty-results case.
+- [x] S17. API tests with FastAPI `TestClient` covering: `/health`, a valid persona, an unknown persona (404), OpenAI failure (502 or 503), and the empty-results case.
 - [~] S18. Data-integrity tests over the real JSON: no selected source predates the cutoff, and every required topic in M3.1 exists in the taxonomy. With the live API (opt-in), each required topic has at least one tagged source.
 - [ ] S19. One opt-in integration test (marked, skipped without a key) that runs the whole pipeline against the live API and checks that the output is non-empty Markdown with valid references.
 
