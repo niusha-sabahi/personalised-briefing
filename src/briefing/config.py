@@ -7,6 +7,8 @@ from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 DEFAULT_SOURCES_PATH = Path("sources_06-05-25.json")
+DEFAULT_TOPICS_PATH = Path("topics.yaml")
+DEFAULT_PERSONAS_PATH = Path("personas.yaml")
 # The newest source is dated 2025-05-06; the task allows sources up to one month older.
 DEFAULT_CUTOFF_DATE = date(2025, 4, 6)
 DEFAULT_LATEST_DATE = date(2025, 5, 6)
@@ -26,7 +28,8 @@ class Settings(BaseSettings):
     embedding_model: str
 
     sources_path: Path = DEFAULT_SOURCES_PATH
-    topics_path: Path = Path("topics.yaml")
+    topics_path: Path = DEFAULT_TOPICS_PATH
+    personas_path: Path = DEFAULT_PERSONAS_PATH
     cache_path: Path = Path(".cache/embeddings")
 
     cutoff_date: date = DEFAULT_CUTOFF_DATE

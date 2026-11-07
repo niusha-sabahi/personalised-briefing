@@ -17,3 +17,12 @@ repos:
         language: system
         types: [python]
         pass_filenames: false
+      - id: pytest
+        name: pytest
+        # The live-API integration test is opt-in and needs a key, so it is skipped here.
+        entry: uv run pytest -q -m "not integration"
+        language: system
+        pass_filenames: false
+        # Run on every commit, not only when Python files change: data files such as
+        # topics.yaml and the sources JSON are covered by tests too.
+        always_run: true

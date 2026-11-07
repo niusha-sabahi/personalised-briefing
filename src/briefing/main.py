@@ -10,7 +10,13 @@ from pathlib import Path
 
 import uvicorn
 
-from briefing.config import DEFAULT_CUTOFF_DATE, DEFAULT_LATEST_DATE, DEFAULT_SOURCES_PATH
+from briefing.config import (
+    DEFAULT_CUTOFF_DATE,
+    DEFAULT_LATEST_DATE,
+    DEFAULT_PERSONAS_PATH,
+    DEFAULT_SOURCES_PATH,
+    DEFAULT_TOPICS_PATH,
+)
 from briefing.sources import (
     MIN_CLEAN_CHARS,
     SourceDataError,
@@ -18,6 +24,7 @@ from briefing.sources import (
     load_sources,
     prepare_sources,
 )
+from briefing.topics import TaxonomyError, load_taxonomy
 
 
 def dates_report(sources_path: Path, cutoff: date, latest: date, only: str | None) -> str:
@@ -50,8 +57,26 @@ def dates_report(sources_path: Path, cutoff: date, latest: date, only: str | Non
     return "\n".join([*rows, "", *summary])
 
 
+def topics_report(topics_path: Path, personas_path: Path) -> str:
+    """Validate topics.yaml and personas.yaml and describe what they define."""
+    taxonomy = load_taxonomy(topics_path, personas_path)
+    lines = [
+        f"{len(taxonomy.topics)} topics, {len(taxonomy.personas)} personas: files are valid.",
+        "",
+    ]
+    for persona in taxonomy.personas:
+        lines.append(f"{persona.id} ({persona.position}, {persona.location})")
+        lines.extend(f"  - {topic_id}" for topic_id in persona.topic_ids)
+    unused = [
+        t.id for t in taxonomy.topics if not any(t.id in p.topic_ids for p in taxonomy.personas)
+    ]
+    if unused:
+        lines.extend(["", "Topics no persona uses: " + ", ".join(unused)])
+    return "\n".join(lines)
+
+
 def run(argv: Sequence[str] | None = None) -> None:
-    """Run the `briefing` command: `serve` (the default) or `dates`."""
+    """Run the `briefing` command: `serve` (the default), `dates` or `topics`."""
     parser = argparse.ArgumentParser(
         prog="briefing", description="Personalised briefing generator."
     )
@@ -62,8 +87,18 @@ def run(argv: Sequence[str] | None = None) -> None:
     dates.add_argument("--cutoff", type=date.fromisoformat, default=DEFAULT_CUTOFF_DATE)
     dates.add_argument("--latest", type=date.fromisoformat, default=DEFAULT_LATEST_DATE)
     dates.add_argument("--only", choices=["kept", "excluded"], help="show only these rows")
+    topics = commands.add_parser("topics", help="validate topics.yaml and personas.yaml")
+    topics.add_argument("--topics", type=Path, default=DEFAULT_TOPICS_PATH)
+    topics.add_argument("--personas", type=Path, default=DEFAULT_PERSONAS_PATH)
     args = parser.parse_args(argv)
 
+    if args.command == "topics":
+        try:
+            print(topics_report(args.topics, args.personas))
+        except TaxonomyError as exc:
+            print(exc, file=sys.stderr)
+            raise SystemExit(1) from exc
+        return
     if args.command == "dates":
         # Page titles and URLs can hold characters a Windows console cannot print.
         if isinstance(sys.stdout, io.TextIOWrapper):

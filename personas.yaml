@@ -1,0 +1,23 @@
+# Personas. A persona is only an id, a position, a location and a list of topic ids
+# from topics.yaml. To add a persona, add an entry here; no code changes are needed.
+personas:
+  - id: healthcare-policy-analyst
+    position: Healthcare Policy Analyst
+    location: United States
+    topic_ids:
+      - healthcare-reform
+      - public-health-data
+      - telemedicine
+      - pharmaceutical-innovation
+      - health-equity
+      - government-policy-updates
+
+  - id: tech-founder
+    position: Tech Startup Founder
+    location: London, United Kingdom
+    topic_ids:
+      - artificial-intelligence
+      - venture-capital
+      - startup-funding
+      - saas-trends
+      - product-management

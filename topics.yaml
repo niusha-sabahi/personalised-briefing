@@ -1,0 +1,83 @@
+# Topic taxonomy. Sources are embedded and tagged with these topics; personas pick
+# from them by id (see personas.yaml). Topics never mention a persona.
+#
+# `description` is what gets embedded, so it is written to match the vocabulary of
+# articles on the topic. Changing a description re-embeds only that topic.
+# Keep `id` stable: personas and cached tags refer to it.
+topics:
+  - id: healthcare-reform
+    label: Healthcare reform
+    description: >-
+      Health care reform and coverage: the Affordable Care Act, Medicaid and Medicare
+      policy, health insurance markets and subsidies, payment and delivery reform,
+      and proposals that change who is covered, what care costs and how it is paid for.
+
+  - id: public-health-data
+    label: Public health data
+    description: >-
+      Public health data and surveillance: disease statistics and trends, CDC reports
+      such as MMWR, vaccination coverage, health surveys, epidemiology, mortality and
+      outcomes data, and analyses of population health measures.
+
+  - id: telemedicine
+    label: Telemedicine
+    description: >-
+      Telemedicine and telehealth: virtual care visits, remote patient monitoring,
+      telehealth coverage, reimbursement and licensing rules, and digital health
+      services that deliver care at a distance.
+
+  - id: pharmaceutical-innovation
+    label: Pharmaceutical innovation
+    description: >-
+      Pharmaceutical innovation: new drug approvals, biosimilars, gene and cell
+      therapies, clinical trials, the drug development pipeline, drug pricing and
+      the regulation of medicines and manufacturers.
+
+  - id: health-equity
+    label: Health equity
+    description: >-
+      Health equity and disparities: unequal access to care and outcomes across
+      racial, income and geographic groups, social determinants of health,
+      underserved communities, and efforts to close gaps in care.
+
+  - id: government-policy-updates
+    label: Government policy updates
+    description: >-
+      Government policy and regulatory updates in health care: federal and state
+      legislation, executive orders, agency rules and guidance from bodies such as
+      HHS, CMS and the FDA, congressional hearings, court rulings and budget
+      decisions that affect health coverage, care delivery and drug regulation.
+
+  - id: artificial-intelligence
+    label: Artificial intelligence
+    description: >-
+      Artificial intelligence technology and industry: AI models and products,
+      generative AI and large language models, AI agents, AI companies and startups,
+      and how businesses adopt, price and regulate AI.
+
+  - id: venture-capital
+    label: Venture capital
+    description: >-
+      Venture capital: VC firms and funds, fund raising by investors, investment
+      trends and valuations, deal flow, exits and the state of the venture market.
+
+  - id: startup-funding
+    label: Startup funding
+    description: >-
+      Funding for startups and scale-ups: seed and Series A, B and later rounds,
+      grants and public funding schemes, accelerators, and how young companies raise
+      money to grow.
+
+  - id: saas-trends
+    label: SaaS trends
+    description: >-
+      Software-as-a-service trends: SaaS business models, pricing and packaging,
+      subscriptions and recurring revenue, growth and retention metrics, and the
+      direction of the cloud software market.
+
+  - id: product-management
+    label: Product management
+    description: >-
+      Product management practice: product strategy, roadmaps and prioritisation,
+      user research, product-led growth, shipping and measuring features, and the
+      tools and careers of product managers.

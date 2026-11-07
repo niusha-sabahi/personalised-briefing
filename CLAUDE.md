@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Status
 
-The project scaffold is in place: a uv project with a `src/briefing/` package (module placeholders plus `config` and a `/health` API), ruff, mypy (strict) and pytest configured, pre-commit and CI config written. The briefing pipeline is not implemented yet. See [README.md](README.md) and REQUIREMENTS.md for progress.
+The project scaffold is in place: a uv project with a `src/briefing/` package (module placeholders plus `config` and a `/health` API), ruff, mypy (strict) and pytest configured, a pre-commit hook (run `uv run pre-commit install` once per clone; it runs ruff format and check, mypy and the tests on every commit) and a CI workflow (written, not yet run on GitHub). Stage 1 (data foundation) is done; the rest of the pipeline is not implemented yet. See [README.md](README.md) and REQUIREMENTS.md for progress.
 
 Commands (all through uv; if `uv` is not on PATH, use `python -m uv`):
 - `uv sync`: install into `.venv`.
@@ -12,6 +12,7 @@ Commands (all through uv; if `uv` is not on PATH, use `python -m uv`):
 - `uv run mypy src`: type check.
 - `uv run pytest --cov`: full test suite.
 - `uv run briefing`: serve the API on http://127.0.0.1:8000.
+- `uv run briefing topics`: validate `topics.yaml` and `personas.yaml` and show which topics each persona follows (exits 1 with a message if invalid).
 - `uv run briefing dates [--only kept|excluded]`: audit the publication date, the rule that found it, and the keep/drop decision for every source. Re-run it after any change to cleaning or date rules and spot-check the output.
 
 Gotcha: the protect hook matches shell commands loosely (best-effort). `.env.example` and the text of `git commit -m` messages are exempt, but a command that names `.env` itself and contains `>` or a mutating word is still blocked even when harmless. The hook also blocks reading `.env` or `.env.*` (other than the placeholders) and printing secret environment variables. Create such files with the Write tool, and avoid redirects in commands that name `.env`.
@@ -83,6 +84,8 @@ serve:  persona topics -> select top-k tagged sources -> extract relevant passag
 
 **Stage 1 result:** 273 entries become 268 unique URLs; 104 pass the recency filter (84 have no determinable date, the rest are older than 2025-04-06). Date rules, strongest first: full date in the URL, year-month in the URL (resolved to a day from the text when possible; a URL month beats a text label), "Published/Posted/Released" label, "Updated/Last update" label, first date near the top of the text. Dates after 2025-05-06 are ignored (events, deadlines). Slash dates (04/05/2025) are not supported because day-first and month-first are ambiguous. A month-only date inside the cutoff month (April 2025) is excluded because the day is unknown. "Published" is what M4 asks for, so a page published long ago but updated recently is judged by its published date when one is labelled.
 
+**Stage 2 result:** `topics.yaml` holds exactly the 11 topics from the task (id, label, description; the description is what gets embedded) and `personas.yaml` holds the two personas as an id, position, location and `topic_ids`. Both are validated on load (`briefing.topics`): slug ids, unique ids, no unknown fields, every persona topic must exist, no repeats. Writing descriptions: they describe a subject area and must not mention a persona (a test enforces this). `government-policy-updates` is deliberately scoped to *health* policy, otherwise the EU urban and education policy pages in the data would be tagged with it and leak into the healthcare briefing. Adding a topic is a YAML change; changing a description re-embeds only that topic (stage 3).
+
 **Data facts that shape the design** (checked 2026-11-06): 273 sources, 5 duplicate URLs; median text about 15k characters, max 375k (so truncate or chunk before embedding); only 39 URLs carry a date, 157 sources have a full date near the top of the text, and 47 have no date anywhere (excluded by M4); topics are mixed (education, EU policy, drugs.com and others), so most sources will stay untagged.
 
 **Stages.** Work in this order. Each stage ends with the quality gate green, requirement statuses updated in REQUIREMENTS.md, and the README updated. Update the Status column below as stages finish.
@@ -91,7 +94,7 @@ serve:  persona topics -> select top-k tagged sources -> extract relevant passag
 |---|---|---|---|
 | 0 | Scaffold, tooling, hooks | M12, S2, S3, S5, S6 | Done |
 | 1 | Data foundation: load, dedupe, clean, date extraction, recency filter, dates audit report (no API needed; riskiest, so first) | M2, M4, S10, part of S16 | Done (M4 complete; truncating or chunking text to the embedding limit, part of S10, moves to stage 3) |
-| 2 | Taxonomy and personas: YAML files and validation (independent of stage 1) | M3.1, part of S9, S16, S18 | Not started |
+| 2 | Taxonomy and personas: YAML files and validation (independent of stage 1) | M3.1, part of S9, S16, S18 | Done (M3.1 complete; serving the taxonomy over the API is stage 6) |
 | 3 | Embeddings, disk cache, tagging, threshold calibration (first live API calls) | M3.2, M3.3, S11, S12 | Not started |
 | 4 | Retrieval: persona selection and passage extraction (pure logic) | M3.4, part of M8 | Not started |
 | 5 | Generation: prompt, structured output, rendering, citation validation, injection defence | M5, M6, M7, M8, S8, S13, S14 | Not started |

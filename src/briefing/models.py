@@ -3,7 +3,10 @@
 from datetime import date
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
+
+# Stable, URL-safe identifiers: lower-case words joined by hyphens.
+_ID_PATTERN = r"^[a-z0-9]+(?:-[a-z0-9]+)*$"
 
 # Which rule produced a publication date; see `briefing.sources.extract_date`.
 DateRule = Literal[
@@ -14,6 +17,28 @@ DateRule = Literal[
     "label_updated",
     "text_head",
 ]
+
+
+class Topic(BaseModel):
+    """A subject that sources are tagged with. `description` is what gets embedded."""
+
+    # Unknown keys are rejected so a typo in the YAML file is an error, not silently ignored.
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    id: str = Field(pattern=_ID_PATTERN)
+    label: str = Field(min_length=1)
+    description: str = Field(min_length=20)
+
+
+class Persona(BaseModel):
+    """Who a briefing is for: a position, a location and the topics they follow."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    id: str = Field(pattern=_ID_PATTERN)
+    position: str = Field(min_length=1)
+    location: str = Field(min_length=1)
+    topic_ids: tuple[str, ...] = Field(min_length=1)
 
 
 class Source(BaseModel):

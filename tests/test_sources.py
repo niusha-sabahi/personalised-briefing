@@ -357,7 +357,7 @@ def test_real_data_selection_never_predates_the_cutoff(real_prepared: list[Prepa
     assert len(selected) > 50
     for item in selected:
         assert item.published is not None
-        assert item.published.value >= date(2025, 4, 1)
+        assert item.published.value >= CUTOFF
         assert is_recent(item.published, CUTOFF)
         assert item.published.value <= LATEST
 

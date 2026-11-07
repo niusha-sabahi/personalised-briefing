@@ -7,10 +7,10 @@ Status: `[ ]` not started · `[~]` in progress or partly done · `[x]` complete 
 ## M – Must have
 
 **Briefing behaviour**
-- [ ] M1. Generate one briefing per persona: Healthcare Policy Analyst (USA) and Tech Startup Founder (London). A persona is data: an id, a position, a location, and a list of topic ids (see M3.1). A persona's briefing is built from sources tagged with those topics.
+- [~] M1. Generate one briefing per persona: Healthcare Policy Analyst (USA) and Tech Startup Founder (London). A persona is data: an id, a position, a location, and a list of topic ids (see M3.1). A persona's briefing is built from sources tagged with those topics.
 - [~] M2. Use only sources from `sources_06-05-25.json`. Do not fetch anything else.
-- [ ] M3. Sources are embedded and organised by topic tag, not by persona. Embeddings and tags never reference a persona, so a new persona only needs a new list of topic ids.
-  - [ ] M3.1. Topic taxonomy: a committed data file (for example `topics.yaml`) where each topic has a stable `id`, a `label`, and a short `description` used for embedding. It must include at least these topics, taken from the persona interests in task.md: healthcare reform, public health data, telemedicine, pharmaceutical innovation, health equity, government policy updates, artificial intelligence, venture capital, startup funding, SaaS trends, product management. Extra topics are allowed and are not limited to these.
+- [~] M3. Sources are embedded and organised by topic tag, not by persona. Embeddings and tags never reference a persona, so a new persona only needs a new list of topic ids.
+  - [x] M3.1. Topic taxonomy: a committed data file (for example `topics.yaml`) where each topic has a stable `id`, a `label`, and a short `description` used for embedding. It must include at least these topics, taken from the persona interests in task.md: healthcare reform, public health data, telemedicine, pharmaceutical innovation, health equity, government policy updates, artificial intelligence, venture capital, startup funding, SaaS trends, product management. Extra topics are allowed and are not limited to these.
   - [ ] M3.2. Embed each source (once, using cleaned text) and each topic description with an OpenAI embedding model. For the sources selected for a briefing, also embed their passages (paragraph-sized chunks, cached) so only passages related to the persona's topics reach the model (M8).
   - [ ] M3.3. Multi-label tagging: a source gets every topic whose cosine similarity is at or above a configured threshold, capped at a configured maximum number of tags per source. A source may have several tags or none. Each tag keeps its similarity score. Untagged sources are never used in a briefing.
   - [ ] M3.4. For a persona, candidate sources are those carrying at least one of the persona's topic ids and passing the recency filter (M4). Rank them by their best score among the persona's topics, with ties broken by URL, and select the top-k. Selection must include a per-topic minimum where available, so one topic cannot crowd out the others.
@@ -54,14 +54,14 @@ Status: `[ ]` not started · `[~]` in progress or partly done · `[x]` complete 
 - [~] S1. `src/` layout with a named package, for example `src/briefing/`, split into modules: `config`, `sources` (load, clean, date), `topics` (taxonomy and personas), `embeddings`, `tagging` (multi-label assignment), `retrieval` (persona selection from tags), `generation`, `api`, `models`. `pyproject.toml` defines the package and a script entry point.
 - [x] S2. Dependencies are split into runtime and dev groups (`uv add --dev`). Dev tools: `ruff` (lint and format), `mypy` or `pyright` (type checking), `pytest`, `pytest-asyncio` or `httpx` for API tests, and `pytest-cov`.
 - [x] S3. Ruff and the type checker are configured in `pyproject.toml`. Both must pass with zero errors, and type hints are used throughout. Ruff enables the `D` (pydocstyle) rules with the Google convention, so a missing or malformed docstring on a public module, function, class or method fails lint.
-- [~] S4. Pre-commit hooks (ruff, type check) and CI (a GitHub Actions workflow running `uv sync --locked`, lint, type check and tests).
+- [~] S4. Pre-commit hooks (ruff format and check, type check, and the test suite without the live-API test) and CI (a GitHub Actions workflow running `uv sync --locked`, lint, type check and tests).
 - [x] S5. A `.env.example` with placeholder values, and `.gitignore` entries for `.venv/`, `.env`, caches and coverage output.
 
 **Configuration and security**
 - [x] S6. Settings are loaded with `pydantic-settings`: API key, model names, tagging threshold, max tags per source, top-k, per-topic minimum, cutoff date, and cache path. No hard-coded secrets or model names in code.
 - [~] S7. The key is wrapped as `SecretStr`. Logs and error responses never contain it. Check git history for a leaked key before pushing.
 - [ ] S8. Source text is untrusted. The prompt separates instructions from source content and tells the model to ignore instructions found inside sources. Generated Markdown is sanitised or escaped when rendered in the frontend.
-- [ ] S9. Pydantic models validate request and response shapes, and validate the topic and persona data files at startup (unique topic ids, every persona topic id exists in the taxonomy). Path parameters are restricted to known personas, and unknown ones return 404.
+- [~] S9. Pydantic models validate request and response shapes, and validate the topic and persona data files at startup (unique topic ids, every persona topic id exists in the taxonomy). Path parameters are restricted to known personas, and unknown ones return 404.
 
 **Correctness and robustness**
 - [~] S10. Clean scraped text before embedding: strip nav links, `[iframe](javascript:false)` and boilerplate, collapse whitespace, and truncate or chunk to the embedding token limit. Skip entries with empty or tiny text.
