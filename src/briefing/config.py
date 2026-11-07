@@ -41,4 +41,9 @@ class Settings(BaseSettings):
     top_k: int = Field(default=8, ge=1)
     per_topic_min: int = Field(default=1, ge=0)
 
+    # Passages scoring below this against every persona topic are left out of the briefing
+    # (M8). Placeholder until calibrated against real passages.
+    passage_threshold: float = Field(default=0.30, ge=-1.0, le=1.0)
+    max_passages_per_source: int = Field(default=4, ge=1)
+
     log_level: str = "INFO"

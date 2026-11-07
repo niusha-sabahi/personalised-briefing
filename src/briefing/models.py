@@ -64,6 +64,59 @@ class PublicationDate(BaseModel):
     precision: Literal["day", "month"] = "day"
 
 
+class Passage(BaseModel):
+    """A paragraph-sized piece of a selected source, and the persona topic it matches best.
+
+    `id` is what the model cites; the application maps it back to `source_url`.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    id: str
+    source_url: str
+    text: str
+    topic_id: str
+    score: float
+
+
+class DraftBullet(BaseModel):
+    """One finding written by the model, with the ids of the passages it rests on."""
+
+    text: str
+    passage_ids: list[str]
+
+
+class DraftSection(BaseModel):
+    """The model's bullets for one topic."""
+
+    topic_id: str
+    bullets: list[DraftBullet]
+
+
+class BriefingDraft(BaseModel):
+    """The structured answer requested from the model (M5). Unchecked until validated."""
+
+    sections: list[DraftSection]
+
+
+class BriefingSource(BaseModel):
+    """A source listed in a briefing under its citation number."""
+
+    number: int
+    title: str
+    url: str
+
+
+class Briefing(BaseModel):
+    """A finished briefing: Markdown plus the sources it cites and what validation removed."""
+
+    persona_id: str
+    markdown: str
+    sources: list[BriefingSource]
+    dropped_bullets: int = 0
+    dropped_citations: int = 0
+
+
 class PreparedSource(BaseModel):
     """A source with its cleaned text and derived publication date (None if undeterminable)."""
 

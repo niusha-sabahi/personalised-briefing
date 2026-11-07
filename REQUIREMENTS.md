@@ -13,12 +13,12 @@ Status: `[ ]` not started · `[~]` in progress or partly done · `[x]` complete 
   - [x] M3.1. Topic taxonomy: a committed data file (for example `topics.yaml`) where each topic has a stable `id`, a `label`, and a short `description` used for embedding. It must include at least these topics, taken from the persona interests in task.md: healthcare reform, public health data, telemedicine, pharmaceutical innovation, health equity, government policy updates, artificial intelligence, venture capital, startup funding, SaaS trends, product management. Extra topics are allowed and are not limited to these.
   - [~] M3.2. Embed each source (once, using cleaned text) and each topic description with an OpenAI embedding model. For the sources selected for a briefing, also embed their passages (paragraph-sized chunks, cached) so only passages related to the persona's topics reach the model (M8).
   - [~] M3.3. Multi-label tagging: a source gets every topic whose cosine similarity is at or above a configured threshold, capped at a configured maximum number of tags per source. A source may have several tags or none. Each tag keeps its similarity score. Untagged sources are never used in a briefing.
-  - [ ] M3.4. For a persona, candidate sources are those carrying at least one of the persona's topic ids and passing the recency filter (M4). Rank them by their best score among the persona's topics, with ties broken by URL, and select the top-k. Selection must include a per-topic minimum where available, so one topic cannot crowd out the others.
+  - [x] M3.4. For a persona, candidate sources are those carrying at least one of the persona's topic ids and passing the recency filter (M4). Rank them by their best score among the persona's topics, with ties broken by URL, and select the top-k. Selection must include a per-topic minimum where available, so one topic cannot crowd out the others.
 - [x] M4. Recency filter: exclude any source with a publication date before 2025-04-06 (one month before 2025-05-06). Derive the date from the URL path or the text, and document the rule used. Sources with no determinable date are excluded.
-- [ ] M5. Generate the briefing with the configured OpenAI generation model (`gpt-5.6-luna`), using only the selected passages as context. The model returns structured JSON (sections by topic, bullets, each citing passage ids); the application renders the Markdown and the Sources list itself, so every link comes from the real source table.
-- [ ] M6. Output is Markdown.
-- [ ] M7. Every claim in the briefing links to a source, and a "Sources" section lists title and URL for each source used. Every cited URL must exist in the input file.
-- [ ] M8. Content must be relevant to the persona, and a briefing contains no off-topic text.
+- [~] M5. Generate the briefing with the configured OpenAI generation model (`gpt-5.6-luna`), using only the selected passages as context. The model returns structured JSON (sections by topic, bullets, each citing passage ids); the application renders the Markdown and the Sources list itself, so every link comes from the real source table.
+- [x] M6. Output is Markdown.
+- [x] M7. Every claim in the briefing links to a source, and a "Sources" section lists title and URL for each source used. Every cited URL must exist in the input file.
+- [~] M8. Content must be relevant to the persona, and a briefing contains no off-topic text.
   - Every source in a briefing carries at least one of the persona's topic ids, and the briefing is organised into sections by topic.
   - A source that is only partly about the persona's topics may still be used, but only its related parts appear in the briefing. Unrelated parts of the article (other subjects, ads, navigation, sidebars, promotional or boilerplate text) are left out.
   - The generation prompt states this rule explicitly: use only the passages relevant to the persona's topics, and omit everything else from each source.
@@ -60,7 +60,7 @@ Status: `[ ]` not started · `[~]` in progress or partly done · `[x]` complete 
 **Configuration and security**
 - [x] S6. Settings are loaded with `pydantic-settings`: API key, model names, tagging threshold, max tags per source, top-k, per-topic minimum, cutoff date, and cache path. No hard-coded secrets or model names in code.
 - [~] S7. The key is wrapped as `SecretStr`. Logs and error responses never contain it. Check git history for a leaked key before pushing.
-- [ ] S8. Source text is untrusted. The prompt separates instructions from source content and tells the model to ignore instructions found inside sources. Generated Markdown is sanitised or escaped when rendered in the frontend.
+- [~] S8. Source text is untrusted. The prompt separates instructions from source content and tells the model to ignore instructions found inside sources. Generated Markdown is sanitised or escaped when rendered in the frontend.
 - [~] S9. Pydantic models validate request and response shapes, and validate the topic and persona data files at startup (unique topic ids, every persona topic id exists in the taxonomy). Path parameters are restricted to known personas, and unknown ones return 404.
 
 **Correctness and robustness**
@@ -68,7 +68,7 @@ Status: `[ ]` not started · `[~]` in progress or partly done · `[x]` complete 
 - [~] S11. Cache embeddings on disk (sources keyed by URL and content hash, topics keyed by id and description hash) so repeat runs make no API calls. Tags are recomputed from cached embeddings, so changing the threshold or adding a topic only embeds the new topic. Cache briefings in memory per persona.
 - [~] S12. Deterministic behaviour where possible: fixed top-k, threshold and tag cap, stable sort (ties broken by URL), no sampling parameters sent to the generation model (`gpt-5.6-luna` has no temperature setting), and embeddings batched in a fixed order.
 - [ ] S13. Handle OpenAI errors: timeouts, rate limits (retry with backoff), and auth failures. Return 502 or 503 with a clear message, never a stack trace. Handle the case where no sources pass the filters by returning a clear "no relevant recent sources" response.
-- [ ] S14. Post-generation check that every `[n]` citation or URL in the briefing maps to a selected source. Drop or flag any that do not.
+- [x] S14. Post-generation check that every `[n]` citation or URL in the briefing maps to a selected source. Drop or flag any that do not.
 - [ ] S15. Logging with the standard `logging` module, with levels set by config.
 
 **Testing**

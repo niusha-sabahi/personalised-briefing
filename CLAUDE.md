@@ -91,6 +91,10 @@ serve:  persona topics -> select top-k tagged sources -> extract relevant passag
 
 **Stage 3 result:** `embeddings.py` has an `Embedder` protocol, `OpenAIEmbedder` (batches of 16, results re-sorted by index), `EmbeddingCache` (one JSON file per text, keyed by sha256 of model and text, atomic writes, corrupt files count as misses) and `CachedEmbedder` (hit and miss counters, duplicate texts embedded once). A source is embedded as its title plus cleaned text truncated to 16,000 characters; a topic as its description. `tagging.py` is pure: `similarity_matrix` (cosine) and `tag_sources` (score >= threshold, strongest first, ties by topic id, capped). The cache key is the content hash and model, not the URL, so identical text is shared and an edited source is re-embedded. The default threshold 0.35 is a placeholder until calibrated from the real report.
 
+**Stage 4 result:** `retrieval.py`. `tag_corpus` embeds and tags every usable source. `select_sources` (pure) keeps candidates that carry a persona topic, ranks by best persona-topic score (ties by URL), gives each persona topic up to `per_topic_min` of its best sources first (a source already chosen counts for every topic it carries; if minimums exceed `top_k`, earlier persona topics win), then fills to `top_k` by overall rank. `split_passages` cuts cleaned text into 200 to 1200 character passages (paragraphs; long ones at sentence ends; short ones merged; tests check no text is lost on the real data). `rank_passages` matches each passage to its best persona topic, drops those under `PASSAGE_THRESHOLD`, keeps the best `MAX_PASSAGES_PER_SOURCE` in document order. `build_context` returns the kept sources and `Passage`s with ids like `s2p3` (a source with no relevant passage is dropped, so ids are numbered after dropping). A selected source may therefore end with fewer than `top_k` sources; backfilling is not done. While the API key is unavailable (README, "Working without an API key"), all of this is tested with fake embedders.
+
+**Stage 5 result:** `generation.py`: `SYSTEM_PROMPT` (fixed rules), `build_prompt` (reader, topic ids, passages in `<passage id topic>` blocks with `<` escaped), `Generator` protocol, `OpenAIGenerator` (Responses API `responses.parse` with `BriefingDraft`, `store=False`, no sampling parameters, error if unparsed), `generate_briefing` (raises `NoRelevantSourcesError` before any model call when there are no passages; `GenerationError` when nothing survives validation or a stray URL is found). `rendering.py` (pure): `validate_draft` (unknown ids removed; a bullet is dropped without a valid citation, without a cited passage on its section's topic, with empty text, or in an unknown section; sections in persona order), `plain_text` and `_escape` (model text can never carry links, headings, lists or HTML), `render_markdown` (citations `[n]` link to the source table, numbered by first citation, only cited sources listed), `foreign_urls` (final guard, S14). Draft and result models are in `models.py`. The same-topic citation rule is strict and untested against the real model: if live drop rates are high, relax it (README checklist, step 5).
+
 **Stages.** Work in this order. Each stage ends with the quality gate green, requirement statuses updated in REQUIREMENTS.md, and the README updated. Update the Status column below as stages finish.
 
 | # | Stage | Requirements | Status |
@@ -99,8 +103,8 @@ serve:  persona topics -> select top-k tagged sources -> extract relevant passag
 | 1 | Data foundation: load, dedupe, clean, date extraction, recency filter, dates audit report (no API needed; riskiest, so first) | M2, M4, S10, part of S16 | Done (M4 complete; truncating or chunking text to the embedding limit, part of S10, moves to stage 3) |
 | 2 | Taxonomy and personas: YAML files and validation (independent of stage 1) | M3.1, part of S9, S16, S18 | Done (M3.1 complete; serving the taxonomy over the API is stage 6) |
 | 3 | Embeddings, disk cache, tagging, threshold calibration (first live API calls) | M3.2, M3.3, S11, S12 | Code done and tested offline; the user's first live `briefing tags` run and the threshold choice are pending |
-| 4 | Retrieval: persona selection and passage extraction (pure logic) | M3.4, part of M8 | Not started |
-| 5 | Generation: prompt, structured output, rendering, citation validation, injection defence | M5, M6, M7, M8, S8, S13, S14 | Not started |
+| 4 | Retrieval: persona selection and passage extraction (pure logic) | M3.4, part of M8 | Done offline (M3.4 complete; `PASSAGE_THRESHOLD` and `MAX_PASSAGES_PER_SOURCE` are placeholders until calibrated with the key) |
+| 5 | Generation: prompt, structured output, rendering, citation validation, injection defence | M5, M6, M7, M8, S8, S13, S14 | Done offline with a fake model (M6, M7, S14 complete; M5, M8 and the prompt's quality need the live model) |
 | 6 | API: endpoints, in-memory cache, error mapping, logging | M9, S9, S13, S15, S17 | Not started |
 | 7 | Frontend | M10, S8 | Not started |
 | 8 | Hardening: live integration test, data-integrity tests, CI and pre-commit verified, key-leak check | S18, S19, S4, S7, M11 | Not started |
@@ -140,6 +144,8 @@ To unprotect the settings and hook files (done by the user, by hand):
 ## Handoffs to the user
 
 You cannot edit or read `.env` or the other protected files, and you cannot run live API commands. When a change you make will need the user to edit such a file or supply something from it (a new setting in `.env`, a key, a value, a live run), say so in the same reply, before they run anything and before the error can happen. Give the exact lines to add and where, and keep this in the closing message of the change. Do not leave them to discover it from an error.
+
+While the API key is unavailable, the README section "Working without an API key (temporary)" holds a checklist of what to do once a key works. After each stage of work, update that checklist with any new live step the stage creates (a new threshold to calibrate, a live check, a model behaviour to verify) and tell the user what you added. Remove the section only when its checklist is done.
 
 ## Environment notes
 
