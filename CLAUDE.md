@@ -13,6 +13,7 @@ Commands (all through uv; if `uv` is not on PATH, use `python -m uv`):
 - `uv run pytest --cov`: full test suite.
 - `uv run briefing`: serve the API on http://127.0.0.1:8000.
 - `uv run briefing topics`: validate `topics.yaml` and `personas.yaml` and show which topics each persona follows (exits 1 with a message if invalid).
+- `uv run briefing tags [--threshold X]`: embed the usable sources and topics (cached in `.cache/embeddings`) and print score quantiles, a threshold sweep and the top sources per topic, to calibrate `TAGGING_THRESHOLD`. Calls the OpenAI API, so the user runs it, not you.
 - `uv run briefing dates [--only kept|excluded]`: audit the publication date, the rule that found it, and the keep/drop decision for every source. Re-run it after any change to cleaning or date rules and spot-check the output.
 
 Gotcha: the protect hook matches shell commands loosely (best-effort). `.env.example` and the text of `git commit -m` messages are exempt, but a command that names `.env` itself and contains `>` or a mutating word is still blocked even when harmless. The hook also blocks reading `.env` or `.env.*` (other than the placeholders) and printing secret environment variables. Create such files with the Write tool, and avoid redirects in commands that name `.env`.
@@ -88,6 +89,8 @@ serve:  persona topics -> select top-k tagged sources -> extract relevant passag
 
 **Data facts that shape the design** (checked 2026-11-06): 273 sources, 5 duplicate URLs; median text about 15k characters, max 375k (so truncate or chunk before embedding); only 39 URLs carry a date, 157 sources have a full date near the top of the text, and 47 have no date anywhere (excluded by M4); topics are mixed (education, EU policy, drugs.com and others), so most sources will stay untagged.
 
+**Stage 3 result:** `embeddings.py` has an `Embedder` protocol, `OpenAIEmbedder` (batches of 16, results re-sorted by index), `EmbeddingCache` (one JSON file per text, keyed by sha256 of model and text, atomic writes, corrupt files count as misses) and `CachedEmbedder` (hit and miss counters, duplicate texts embedded once). A source is embedded as its title plus cleaned text truncated to 16,000 characters; a topic as its description. `tagging.py` is pure: `similarity_matrix` (cosine) and `tag_sources` (score >= threshold, strongest first, ties by topic id, capped). The cache key is the content hash and model, not the URL, so identical text is shared and an edited source is re-embedded. The default threshold 0.35 is a placeholder until calibrated from the real report.
+
 **Stages.** Work in this order. Each stage ends with the quality gate green, requirement statuses updated in REQUIREMENTS.md, and the README updated. Update the Status column below as stages finish.
 
 | # | Stage | Requirements | Status |
@@ -95,7 +98,7 @@ serve:  persona topics -> select top-k tagged sources -> extract relevant passag
 | 0 | Scaffold, tooling, hooks | M12, S2, S3, S5, S6 | Done |
 | 1 | Data foundation: load, dedupe, clean, date extraction, recency filter, dates audit report (no API needed; riskiest, so first) | M2, M4, S10, part of S16 | Done (M4 complete; truncating or chunking text to the embedding limit, part of S10, moves to stage 3) |
 | 2 | Taxonomy and personas: YAML files and validation (independent of stage 1) | M3.1, part of S9, S16, S18 | Done (M3.1 complete; serving the taxonomy over the API is stage 6) |
-| 3 | Embeddings, disk cache, tagging, threshold calibration (first live API calls) | M3.2, M3.3, S11, S12 | Not started |
+| 3 | Embeddings, disk cache, tagging, threshold calibration (first live API calls) | M3.2, M3.3, S11, S12 | Code done and tested offline; the user's first live `briefing tags` run and the threshold choice are pending |
 | 4 | Retrieval: persona selection and passage extraction (pure logic) | M3.4, part of M8 | Not started |
 | 5 | Generation: prompt, structured output, rendering, citation validation, injection defence | M5, M6, M7, M8, S8, S13, S14 | Not started |
 | 6 | API: endpoints, in-memory cache, error mapping, logging | M9, S9, S13, S15, S17 | Not started |
@@ -133,6 +136,10 @@ To unprotect the settings and hook files (done by the user, by hand):
 1. In `.claude/settings.json`, delete the deny rules for `/.claude/settings.json`, `/.claude/settings.local.json` and `/.claude/hooks/**` (the three `Edit(...)` and three `Write(...)` lines). Then make sure the last remaining entry in the `deny` array has no trailing comma, or the JSON is invalid.
 2. In `.claude/hooks/protect_files.py`, replace the `PROTECTED_PATHS` tuple with `PROTECTED_PATHS = ()`. Keep the name defined.
 3. Restart the session so the changes load.
+
+## Handoffs to the user
+
+You cannot edit or read `.env` or the other protected files, and you cannot run live API commands. When a change you make will need the user to edit such a file or supply something from it (a new setting in `.env`, a key, a value, a live run), say so in the same reply, before they run anything and before the error can happen. Give the exact lines to add and where, and keep this in the closing message of the change. Do not leave them to discover it from an error.
 
 ## Environment notes
 
