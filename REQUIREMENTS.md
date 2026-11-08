@@ -1,6 +1,6 @@
 # Requirements
 
-Tiers: **M** Must have (mandatory per task.md) · **S** Should have (quality, security, Python standards) · **C** Could have (nice to have, only after M and S).
+Tiers: **M** Must have (mandatory per task.md) · **S** Should have (quality, security, Python standards).
 
 Status: `[ ]` not started · `[~]` in progress or partly done · `[x]` complete and verified (tests pass, no regressions). Update the marker in the same change that affects it, and never mark `[x]` without evidence (a passing test or a manual check). When a requirement with sub-requirements (such as M3) is marked `[x]`, all its sub-requirements must be `[x]` too.
 
@@ -35,7 +35,7 @@ Status: `[ ]` not started · `[~]` in progress or partly done · `[x]` complete 
 - [x] M13. Plain Python only, with no notebooks.
 - [x] M14. `README.md` covers prerequisites, setup (`uv sync`, copy `.env.example` to `.env`), how to run the server and frontend, how to call the API, and how to run the tests.
 - [x] M15. Extension: an Agent Skill (a `SKILL.md` with name and description frontmatter, following agentskills.io) that lets a coding agent set up, start and test the application, including calling the endpoints and checking that the output is valid.
-- [~] M16. Deliver everything as one private GitHub repository. The repo root is the project root (the existing `takehome/` git repo, with its `origin` remote), and it contains all of the following, committed:
+- [x] M16. Deliver everything as one private GitHub repository. The repo root is the project root (the existing `takehome/` git repo, with its `origin` remote), and it contains all of the following, committed:
   - Backend source in `src/`, the frontend, and `tests/`.
   - `pyproject.toml`, `uv.lock`, `.python-version`, `.gitignore`, `.env.example`, and `README.md`.
   - The input data file `sources_06-05-25.json`, so the app runs after a clone with no extra downloads.
@@ -51,7 +51,7 @@ Status: `[ ]` not started · `[~]` in progress or partly done · `[x]` complete 
 ## S – Should have
 
 **Project layout and tooling**
-- [~] S1. `src/` layout with a named package, for example `src/briefing/`, split into modules: `config`, `sources` (load, clean, date), `topics` (taxonomy and personas), `embeddings`, `tagging` (multi-label assignment), `retrieval` (persona selection from tags), `generation`, `api`, `models`. `pyproject.toml` defines the package and a script entry point.
+- [x] S1. `src/` layout with a named package, for example `src/briefing/`, split into modules: `config`, `sources` (load, clean, date), `topics` (taxonomy and personas), `embeddings`, `tagging` (multi-label assignment), `retrieval` (persona selection from tags), `generation`, `api`, `models`. `pyproject.toml` defines the package and a script entry point.
 - [x] S2. Dependencies are split into runtime and dev groups (`uv add --dev`). Dev tools: `ruff` (lint and format), `mypy` or `pyright` (type checking), `pytest`, `pytest-asyncio` or `httpx` for API tests, and `pytest-cov`.
 - [x] S3. Ruff and the type checker are configured in `pyproject.toml`. Both must pass with zero errors, and type hints are used throughout. Ruff enables the `D` (pydocstyle) rules with the Google convention, so a missing or malformed docstring on a public module, function, class or method fails lint.
 - [x] S4. Pre-commit hooks (ruff format and check, type check, and the test suite without the live-API test) and CI (a GitHub Actions workflow running `uv sync --locked`, lint, type check and tests).
@@ -66,25 +66,16 @@ Status: `[ ]` not started · `[~]` in progress or partly done · `[x]` complete 
 **Correctness and robustness**
 - [x] S10. Clean scraped text before embedding: strip nav links, `[iframe](javascript:false)` and boilerplate, collapse whitespace, and truncate or chunk to the embedding token limit. Skip entries with empty or tiny text.
 - [x] S11. Cache embeddings on disk (sources keyed by URL and content hash, topics keyed by id and description hash) so repeat runs make no API calls. Tags are recomputed from cached embeddings, so changing the threshold or adding a topic only embeds the new topic. Cache briefings in memory per persona.
-- [~] S12. Deterministic behaviour where possible: fixed top-k, threshold and tag cap, stable sort (ties broken by URL), no sampling parameters sent to the generation model (`gpt-5.6-luna` has no temperature setting), and embeddings batched in a fixed order.
+- [x] S12. Deterministic behaviour where possible: fixed top-k, threshold and tag cap, stable sort (ties broken by URL), no sampling parameters sent to the generation model (`gpt-5.6-luna` has no temperature setting), and embeddings batched in a fixed order.
 - [x] S13. Handle OpenAI errors: timeouts, rate limits (retry with backoff), and auth failures. Return 502 or 503 with a clear message, never a stack trace. Handle the case where no sources pass the filters by returning a clear "no relevant recent sources" response.
 - [x] S14. Post-generation check that every `[n]` citation or URL in the briefing maps to a selected source. Drop or flag any that do not.
 - [x] S15. Logging with the standard `logging` module, with levels set by config.
 
 **Testing**
-- [~] S16. Unit tests with the OpenAI client mocked, covering: date extraction (URL form, text form, missing, malformed), the cutoff boundary (2025-04-05 excluded, 2025-04-06 included), text cleaning, multi-label tagging (several tags, no tags, threshold boundary, tag cap), persona selection from tags (union across topics, per-topic minimum, top-k, tie-break), citation validation, and taxonomy and persona validation (duplicate topic id, unknown topic id in a persona).
+- [x] S16. Unit tests with the OpenAI client mocked, covering: date extraction (URL form, text form, missing, malformed), the cutoff boundary (2025-04-05 excluded, 2025-04-06 included), text cleaning, multi-label tagging (several tags, no tags, threshold boundary, tag cap), persona selection from tags (union across topics, per-topic minimum, top-k, tie-break), citation validation, and taxonomy and persona validation (duplicate topic id, unknown topic id in a persona).
 - [x] S17. API tests with FastAPI `TestClient` covering: `/health`, a valid persona, an unknown persona (404), OpenAI failure (502 or 503), and the empty-results case.
 - [x] S18. Data-integrity tests over the real JSON: no selected source predates the cutoff, and every required topic in M3.1 exists in the taxonomy. With the live API (opt-in), each required topic has at least one tagged source.
 - [x] S19. One opt-in integration test (marked, skipped without a key) that runs the whole pipeline against the live API and checks that the output is non-empty Markdown with valid references.
 
 **Documentation**
-- [~] S20. The README has a short architecture overview (one paragraph or a small diagram of the flow: clean, embed, tag, retrieve, generate, validate citations) that matches the code. Endpoints have a `summary`, response models and error responses so `/docs` serves as the API reference. Config options are documented once, in `.env.example` and the settings class.
-
-## C – Could have
-
-- [ ] C1. Dockerfile using the uv image, plus `docker compose` for one-command startup.
-- [ ] C2. Add an LLM-based relevance rerank or per-section summaries (policy, pharma, telemedicine) after embedding retrieval.
-- [ ] C3. Load personas from a YAML or JSON file so new personas need no code changes, and add a `POST /briefings` endpoint that accepts a custom persona (position, location, topic ids).
-- [ ] C4. Streaming generation (SSE) for the frontend.
-- [ ] C5. A coverage threshold enforced in CI, and a `Makefile` or `uv run` task aliases (`lint`, `test`, `serve`).
-- [ ] C6. Structured JSON logging and request IDs.
+- [x] S20. The README has a short architecture overview (one paragraph or a small diagram of the flow: clean, embed, tag, retrieve, generate, validate citations) that matches the code. Endpoints have a `summary`, response models and error responses so `/docs` serves as the API reference. Config options are documented once, in `.env.example` and the settings class.
