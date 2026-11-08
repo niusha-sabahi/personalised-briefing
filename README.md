@@ -27,34 +27,34 @@ These steps are written for Windows, macOS and Linux. They were tested on Window
 - **An OpenAI API key** that can use the generation model and the embedding model.
 - Optional: Chrome, Chromium or Edge, for the browser-based sanitiser tests (they are skipped without one).
 
-**1. Clone and install**
+**1. Clone and install.** The last command creates `.venv` and installs the locked dependencies.
 
 ```
 git clone https://github.com/niusha-sabahi/personalised-briefing.git
 cd personalised-briefing
-uv sync                      # creates .venv and installs the locked dependencies
+uv sync
 ```
 
 The input data (`sources_06-05-25.json`) is in the repository, so nothing else is downloaded.
 
 **2. Add your settings.** Copy the example file and edit the copy (macOS and Linux: `cp .env.example .env`; Windows PowerShell: `Copy-Item .env.example .env`). Set `OPENAI_API_KEY` to your key. The two model names are already filled in as `GENERATION_MODEL=gpt-5.6-luna` and `EMBEDDING_MODEL=text-embedding-3-small`; change them only if your account uses other models. Every other option is optional and documented in [.env.example](.env.example). The settings file is gitignored, so your key is never committed.
 
-**3. Check the install (free, no key needed)**
+**3. Check the install (free, no key needed).** The first command prints both personas and their topics. The second runs the offline test suite, which takes about a minute.
 
 ```
-uv run briefing topics       # prints both personas and their topics
-uv run pytest                # the offline test suite, about a minute
+uv run briefing topics
+uv run pytest
 ```
 
-**4. Start the server**
+**4. Start the server.** It serves on http://127.0.0.1:8000.
 
 ```
-uv run briefing              # serves on http://127.0.0.1:8000
+uv run briefing
 ```
 
 Open `http://127.0.0.1:8000/` in a browser and choose a persona. The first briefing request is slow, because it embeds the sources and passages and calls the generation model; it costs a few cents. The embeddings are cached in `.cache/embeddings`, so later runs are quicker, and repeat requests for the same persona are served from memory. Stop the server with Ctrl+C.
 
-**5. Optional: check the running app end to end.** Stop the server first (the check starts its own on the same port):
+**5. Optional: run the Agent Skill.** The project includes an Agent Skill named `test-briefing-app` (its instructions are in [skills/test-briefing-app/SKILL.md](skills/test-briefing-app/SKILL.md)). It lets a coding agent set up, start and test the app. The skill's check script can also be run by hand: it starts the server, checks every endpoint and each persona's briefing, then stops the server. Stop your own server first, because the check uses the same port. It calls OpenAI, so it costs a few cents.
 
 ```
 uv run python skills/test-briefing-app/scripts/check_app.py --start
@@ -73,37 +73,47 @@ uv run python skills/test-briefing-app/scripts/check_app.py --start
 
 ## Run
 
+Start the server, which serves the API on `http://127.0.0.1:8000`. Then, from a second terminal, check that it is up:
+
 ```
-uv run briefing              # serves the API on http://127.0.0.1:8000
+uv run briefing
 curl http://127.0.0.1:8000/health
 ```
 
-Interactive API docs (the API reference) are at `http://127.0.0.1:8000/docs`. The server refuses to start if the settings or `topics.yaml` / `personas.yaml` are invalid. Endpoints:
+Interactive API docs (the API reference) are at `http://127.0.0.1:8000/docs`. The server refuses to start if the settings or `topics.yaml` / `personas.yaml` are invalid. The endpoints, in the order of the commands below, return:
+
+- the topic taxonomy;
+- the persona ids and their topics;
+- a Markdown briefing;
+- a JSON briefing (the Markdown plus the cited sources).
 
 ```
-curl http://127.0.0.1:8000/topics                                       # the topic taxonomy
-curl http://127.0.0.1:8000/personas                                     # persona ids and their topics
-curl http://127.0.0.1:8000/briefings/healthcare-policy-analyst          # Markdown briefing
-curl "http://127.0.0.1:8000/briefings/tech-founder?format=json"         # JSON: markdown plus cited sources
+curl http://127.0.0.1:8000/topics
+curl http://127.0.0.1:8000/personas
+curl http://127.0.0.1:8000/briefings/healthcare-policy-analyst
+curl "http://127.0.0.1:8000/briefings/tech-founder?format=json"
 ```
 
 The first briefing request embeds the sources (cached on disk) and calls the generation model, so it is slow and needs a working OpenAI key; later requests for the same persona are served from memory until the server restarts. Errors are JSON `{"detail": ...}`: 404 for an unknown persona or when no relevant recent sources exist, 503 when OpenAI is rate limiting or unreachable, 502 when OpenAI rejects the request or returns an unusable answer. They never include provider messages or stack traces. If OpenAI rejects a request, the server log shows only the error class and status; set `LOG_LEVEL=DEBUG` to also log the provider's message with key-like text masked, which says which parameter it objected to. 
 
 ### Topics and personas
 
-Topics (`topics.yaml`) and personas (`personas.yaml`) are plain data. A persona is an id, a position, a location and a list of topic ids; to add one, add an entry (no code changes). Both files are validated when loaded (unique slug ids, no unknown fields, every persona topic must exist). To check them:
+Topics (`topics.yaml`) and personas (`personas.yaml`) are plain data. A persona is an id, a position, a location and a list of topic ids; to add one, add an entry (no code changes). Both files are validated when loaded (unique slug ids, no unknown fields, every persona topic must exist). To check them (the command reports whether the files are valid and which topics each persona follows):
 
 ```
-uv run briefing topics                # valid? which topics does each persona follow?
+uv run briefing topics
 ```
 
 ### Embeddings and topic tags
 
-Each recent source (title plus cleaned text, truncated to 16,000 characters) and each topic description is embedded with `EMBEDDING_MODEL`. Vectors are cached on disk in `CACHE_PATH`, keyed by a hash of the model and the text, so a repeat run makes no API calls and changing one topic description re-embeds only that topic. A source is tagged with every topic whose cosine similarity is at or above `TAGGING_THRESHOLD`, up to `MAX_TAGS_PER_SOURCE`. The defaults (threshold 0.30, at most 4 tags) were calibrated on the real sources: unrelated pages score about 0.2 against a topic and on-topic pages 0.4 to 0.6, and the tags only build the candidate pool, so they favour recall while passage matching does the precise filtering. This command calls the OpenAI API (it needs your key in the local env file) and prints the score distribution to choose it from:
+Each recent source (title plus cleaned text, truncated to 16,000 characters) and each topic description is embedded with `EMBEDDING_MODEL`. Vectors are cached on disk in `CACHE_PATH`, keyed by a hash of the model and the text, so a repeat run makes no API calls and changing one topic description re-embeds only that topic. A source is tagged with every topic whose cosine similarity is at or above `TAGGING_THRESHOLD`, up to `MAX_TAGS_PER_SOURCE`. The defaults (threshold 0.30, at most 4 tags) were calibrated on the real sources: unrelated pages score about 0.2 against a topic and on-topic pages 0.4 to 0.6, and the tags only build the candidate pool, so they favour recall while passage matching does the precise filtering. This command calls the OpenAI API (it needs your key in the local env file) and prints the score distribution to choose it from. 
+
+The first command shows score quantiles, a threshold sweep and the top sources per topic. 
+The second tries another threshold without changing the settings:
 
 ```
-uv run briefing tags                  # score quantiles, threshold sweep, top sources per topic
-uv run briefing tags --threshold 0.40 # try another threshold without changing the settings
+uv run briefing tags
+uv run briefing tags --threshold 0.40
 ```
 
 ### Frontend
@@ -114,34 +124,49 @@ Both libraries are copied into `src/briefing/static/vendor/` (marked 18.1.1, DOM
 
 ### Calibrating the passage settings
 
-`PASSAGE_THRESHOLD`, `MAX_PASSAGES_PER_TOPIC` and `MAX_PASSAGES_PER_SOURCE` decide which passages of the selected sources reach the model: each persona topic takes its best passages (at least the threshold) from across the sources, and no one source supplies more than the per-source limit. Page furniture (link lists, consent banners, legal footers, reference lists) is removed first. This report (it calls the OpenAI API for the passage embeddings, which are cached) shows, for each persona topic, how many passages clear each threshold and how many were chosen, then each selected source with its chosen passages, a few runners-up and how many passages were dropped as boilerplate:
+`PASSAGE_THRESHOLD`, `MAX_PASSAGES_PER_TOPIC` and `MAX_PASSAGES_PER_SOURCE` decide which passages of the selected sources reach the model: each persona topic takes its best passages (at least the threshold) from across the sources, and no one source supplies more than the per-source limit. Page furniture (link lists, consent banners, legal footers, reference lists) is removed first. This report (it calls the OpenAI API for the passage embeddings, which are cached) shows, for each persona topic, how many passages clear each threshold and how many were chosen, then each selected source with its chosen passages, a few runners-up and how many passages were dropped as boilerplate. The commands below run it:
+
+- for every persona;
+- for one persona;
+- with another passage threshold;
+- without the recency preference.
 
 ```
-uv run briefing passages                                  # every persona
-uv run briefing passages --persona tech-founder           # one persona
-uv run briefing passages --threshold 0.35                 # try another passage threshold
-uv run briefing passages --recency-bonus 0               # see the selection without the recency preference
+uv run briefing passages
+uv run briefing passages --persona tech-founder
+uv run briefing passages --threshold 0.35
+uv run briefing passages --recency-bonus 0
 ```
 
 ### Publication dates and the recency filter
 
-The sources have no date field, so each date is derived (strongest rule first): a full date in the URL, a year-month in the URL (refined from the text when it has a date in that month), a "Published/Posted/Released" label, an "Updated/Last update" label, then the first date near the top of the text. Dates after 2025-05-06 are ignored, and sources with no determinable date are excluded. A source is kept if published on or after 2025-04-06 (`CUTOFF_DATE`). To audit the result for every source (no API key needed):
+The sources have no date field, so each date is derived (strongest rule first): a full date in the URL, a year-month in the URL (refined from the text when it has a date in that month), a "Published/Posted/Released" label, an "Updated/Last update" label, then the first date near the top of the text. Dates after 2025-05-06 are ignored, and sources with no determinable date are excluded. A source is kept if published on or after 2025-04-06 (`CUTOFF_DATE`). To audit the result for every source (no API key needed), the first command lists every source with KEEP or DROP, its date, the rule that found it and its URL. The second shows only the kept sources (use `--only excluded` for the others):
 
 ```
-uv run briefing dates                 # every source: KEEP/DROP, date, rule, URL
-uv run briefing dates --only kept     # or --only excluded
+uv run briefing dates
+uv run briefing dates --only kept
 ```
 
 ## Develop
 
+The commands below, in order:
+
+- format and lint (includes the docstring rules);
+- type check;
+- run the tests (the sanitiser tests need Chrome, Chromium or Edge, else they skip);
+- run the opt-in live tests against OpenAI (a few cents, needs your key);
+- run the Agent Skill's end-to-end check (live, a few cents);
+- install the pre-commit hooks, once per clone (they run format, lint, type check and the tests on each commit);
+- run the hooks on demand (needs Git 2.31 or newer).
+
 ```
-uv run ruff format && uv run ruff check --fix   # format and lint (includes docstring rules)
-uv run mypy src                                 # type check
-uv run pytest --cov                             # tests (the sanitiser tests need Chrome, Chromium or Edge, else they skip)
-uv run pytest -m integration -v                 # opt-in live tests against OpenAI: a few cents, needs your key
-uv run python skills/test-briefing-app/scripts/check_app.py --start   # the Agent Skill's end-to-end check (live, a few cents)
-uv run pre-commit install                       # once per clone: run format, lint, type check and tests on each commit
-uv run pre-commit run --all-files               # run them on demand (needs Git 2.31 or newer)
+uv run ruff format && uv run ruff check --fix
+uv run mypy src
+uv run pytest --cov
+uv run pytest -m integration -v
+uv run python skills/test-briefing-app/scripts/check_app.py --start
+uv run pre-commit install
+uv run pre-commit run --all-files
 ```
 
 ## Architecture
