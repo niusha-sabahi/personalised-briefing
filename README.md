@@ -1,6 +1,21 @@
-# Personalised Briefing
+# Executive Briefing
 
 A FastAPI service that generates Markdown briefings, with cited sources, for different personas from a set of web sources. See [task.md](task.md) for the assignment and [REQUIREMENTS.md](REQUIREMENTS.md) for the full requirements.
+
+## Features
+
+- **Two personas out of the box:** a Healthcare Policy Analyst (USA) and a Tech Startup Founder (London). A persona is just a list of topics in a YAML file, so adding one needs no code change.
+- **Relevant and recent:** briefings use only the supplied sources, only those published in the month before 6 May 2025, and only the passages that match the persona's topics.
+- **Every claim cited:** each bullet links to its source, the Sources list names the title and site, and any citation the app cannot verify is dropped.
+- **Organised by topic:** one section per topic the persona follows, with nothing off-topic.
+- **Web page:** persona cards that show the topics each one follows, a loading spinner with a retry button, and a strip showing how many sources were used, their dates and when the briefing was prepared.
+- **Document-style briefing:** readable serif text, small unobtrusive citation numbers and a banner with a logo.
+- **Light and dark mode:** the page follows your device's light or dark setting.
+- **Print or save as PDF:** use the browser's own print function (Ctrl+P, then "Save as PDF"). A print layout removes the banner and buttons, uses black on white, writes out each source's web address and keeps headings with their text, so the saved page reads as a clean document.
+- **Safe by design:** the API key never appears in logs or responses, source text is treated as untrusted, the briefing is sanitised before display, and the page loads nothing from other sites.
+- **API:** JSON or Markdown briefings, with interactive docs at `/docs`.
+- **Quick repeats:** embeddings are cached on disk and finished briefings in memory.
+- **Tested end to end:** hundreds of offline tests, opt-in live tests, and an Agent Skill that lets a coding agent set up, start and check the app.
 
 ## Setup (from a fresh clone)
 
@@ -93,7 +108,7 @@ uv run briefing tags --threshold 0.40 # try another threshold without changing t
 
 ### Frontend
 
-Open `http://127.0.0.1:8000/` for the web page: choose a persona and its briefing is shown, with a loading message (the first one is slow) and a retry button if something fails. It is one static page in `src/briefing/static/` with no build step. The briefing Markdown is rendered with [marked](https://github.com/markedjs/marked) and cleaned with [DOMPurify](https://github.com/cure53/DOMPurify) before it is inserted (only headings, paragraphs, lists, links and basic emphasis survive, and only `https://` links), and the page is served with a strict Content-Security-Policy that blocks inline script and any third-party request.
+Open `http://127.0.0.1:8000/` for the web page. A banner gives the title and a one-line description. Personas are cards side by side (one per row on a narrow screen), each with an initials badge, the role, the location and the topics it follows (the first four, then "+n more"). They work as a radio group: Tab to the group, the arrow keys move between the cards, and Enter, Space or a click chooses one. Choosing one shows its briefing as a document (serif text, small raised citation numbers, a Sources list that names each site), with a spinner while it is prepared (the first one takes 10 to 20 seconds), a retry button if something fails, and a strip above it with the number of sources, the months they come from and when the briefing was prepared. The page prints cleanly (Ctrl+P, or "Save as PDF" in the print dialog): the banner and controls are hidden and each source's address is spelled out. It is one static page in `src/briefing/static/` with no build step, and it uses only system fonts. The briefing Markdown is rendered with [marked](https://github.com/markedjs/marked) and cleaned with [DOMPurify](https://github.com/cure53/DOMPurify) before it is inserted (only headings, paragraphs, lists, links and basic emphasis survive, and only `https://` links), and the page is served with a strict Content-Security-Policy that blocks inline script and any third-party request.
 
 Both libraries are copied into `src/briefing/static/vendor/` (marked 18.1.1, DOMPurify 3.4.17), so the page loads nothing from a CDN and works offline. To upgrade one, download it into an empty directory with `npm pack marked@<version> dompurify@<version>`, copy `lib/marked.umd.js` and `dist/purify.min.js` (and the licence files) over the vendored copies, and update the pinned hashes in `tests/test_frontend.py`, which fail on any unplanned change.
 
@@ -177,7 +192,7 @@ The retrieval settings were set from real data with the live API, and are docume
 
 ### Testing and quality
 
-- 369 offline tests that use fake models, so they need no key: unit tests for every stage, API tests, pinned hashes for the input data and the vendored libraries, and a real headless browser for the HTML sanitiser (with a negative control to prove the checks can fail).
+- 390 offline tests that use fake models, so they need no key: unit tests for every stage, API tests, pinned hashes for the input data and the vendored libraries, and a real headless browser for the HTML sanitiser (with a negative control to prove the checks can fail).
 - 3 opt-in live tests (`uv run pytest -m integration`) run the whole pipeline against OpenAI, check that every topic has tagged sources, and attempt a prompt injection.
 - Ruff (with docstring rules), strict mypy, pre-commit and GitHub Actions CI all pass.
 
@@ -187,7 +202,8 @@ Calibrating on real scores and reading real briefings led to these decisions (de
 
 ## Future Work
 
-- **Custom personas from a description.** Let a user describe their interests in a sentence or two (for example "I run a climate-tech fund and follow carbon markets and grid storage") and have the AI generate the topics for a new persona, so defining one needs no knowledge of the taxonomy. A sketch of how it would fit the current design:
+- **Custom personas from a description.** Let a user describe their interests in a sentence or two (for example "I run a climate-tech fund and follow carbon markets and grid storage") and have the AI generate the topics for a new persona, so defining one needs no knowledge of the taxonomy.
+- **Option to download the brief as PDF** Allows the user to download the brief text as a PDF document, by a button on the brief page.
 - **Briefing quality.** Known limitations from the live reads:
   - A company's own press-release claim (a self-reported accuracy figure) can pass as news.
   - The "state each development once" rule shortened the executive-order coverage, so some of its details are missing.

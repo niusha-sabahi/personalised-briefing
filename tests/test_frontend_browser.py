@@ -251,9 +251,25 @@ def test_the_page_runs_under_its_policy_and_lists_the_personas(
     browser: str, live_server: str
 ) -> None:
     page = dump_dom(browser, live_server + "/")
-    buttons = re.findall(r'<button type="button" aria-pressed="false">(.*?)</button>', page)
-    assert [html.unescape(b) for b in buttons] == [
-        "Health Analyst · United States",
-        "Startup Founder · London",
-        "Forecaster · Nowhere",
+    assert 'role="radiogroup"' in page
+    opening = re.findall(r"<button ([^>]*)>", page)
+    assert len(opening) == 3
+    # Radio semantics: one tab stop to begin with (the first card), none of them chosen yet.
+    assert all('role="radio"' in tag and 'aria-checked="false"' in tag for tag in opening)
+    assert [('tabindex="0"' in tag) for tag in opening] == [True, False, False]
+
+    cards = re.findall(
+        r'<span class="badge" aria-hidden="true">(.*?)</span>'
+        r'<span class="persona-text"><span class="persona-name">(.*?)</span>'
+        r'<span class="persona-place">(.*?)</span><span class="chips">(.*?)</span></span>'
+        r'<span class="check" aria-hidden="true"></span></button>',
+        page,
+    )
+    assert [(html.unescape(n), html.unescape(p), b) for b, n, p, _ in cards] == [
+        ("Health Analyst", "United States", "HA"),
+        ("Startup Founder", "London", "SF"),
+        ("Forecaster", "Nowhere", "F"),
     ]
+    # Each card lists the labels of the topics the persona follows (from /topics).
+    chips = [re.findall(r'<span class="chip">(.*?)</span>', rest) for _, _, _, rest in cards]
+    assert chips == [["Health"], ["Startups"], ["Weather"]]

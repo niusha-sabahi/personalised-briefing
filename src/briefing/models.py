@@ -1,6 +1,6 @@
 """Pydantic models shared across modules (sources, topics, personas, briefings)."""
 
-from datetime import date
+from datetime import UTC, date, datetime
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -105,6 +105,8 @@ class BriefingSource(BaseModel):
     number: int
     title: str
     url: str
+    # For a source dated only to a month, the first day of that month: show it as a month.
+    published: date | None = None
 
 
 class Briefing(BaseModel):
@@ -115,6 +117,7 @@ class Briefing(BaseModel):
     sources: list[BriefingSource]
     dropped_bullets: int = 0
     dropped_citations: int = 0
+    generated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
 class PreparedSource(BaseModel):

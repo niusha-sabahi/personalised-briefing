@@ -1,6 +1,7 @@
 import logging
 import re
 from collections.abc import Callable
+from datetime import UTC, datetime
 from pathlib import Path
 
 import httpx
@@ -80,9 +81,23 @@ def test_briefing_as_json_lists_the_cited_sources(env: Env) -> None:
             "number": 1,
             "title": "Startup news",
             "url": "https://example.test/2025/05/01/startup-news",
+            "published": "2025-05-01",
         }
     ]
     assert data["markdown"].startswith("# Briefing: Startup Founder, London")
+    assert (
+        "[Startup news](https://example.test/2025/05/01/startup-news) · example.test"
+        in (data["markdown"])
+    )
+
+
+def test_briefing_json_says_when_it_was_prepared(env: Env) -> None:
+    data = env.client.get("/briefings/founder", params={"format": "json"}).json()
+    prepared = datetime.fromisoformat(data["generated_at"])
+    assert prepared.tzinfo is not None  # the page shows it in the reader's own time zone
+    assert abs((datetime.now(UTC) - prepared).total_seconds()) < 60
+    again = env.client.get("/briefings/founder", params={"format": "json"}).json()
+    assert again["generated_at"] == data["generated_at"]  # a cached briefing keeps its time
 
 
 def test_invalid_format_is_rejected(env: Env) -> None:

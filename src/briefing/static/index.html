@@ -3,23 +3,31 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Personalised Briefing</title>
-  <link rel="icon" href="data:,">
+  <title>Executive Briefing</title>
+  <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
   <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
-  <header>
-    <h1>Personalised Briefing</h1>
-    <p>Choose who the briefing is for.</p>
+  <header class="banner">
+    <div class="banner-inner">
+      <img class="logo" src="/static/favicon.svg" alt="" width="48" height="48">
+      <div>
+        <h1>Executive Briefing</h1>
+        <p>Recent developments in your field, distilled into a short briefing with every claim sourced.</p>
+      </div>
+    </div>
   </header>
   <main>
-    <div id="personas" role="group" aria-label="Personas"></div>
+    <p class="prompt" id="personas-label">Select a persona:</p>
+    <div id="personas" role="radiogroup" aria-labelledby="personas-label"></div>
     <p id="status" role="status" aria-live="polite"></p>
+    <p id="meta" class="meta" hidden></p>
     <article id="briefing" tabindex="-1" aria-busy="false"></article>
   </main>
   <script src="/static/vendor/marked.umd.js"></script>
   <script src="/static/vendor/purify.min.js"></script>
   <script src="/static/render.js"></script>
+  <script src="/static/meta.js"></script>
   <script src="/static/app.js"></script>
 </body>
 </html>

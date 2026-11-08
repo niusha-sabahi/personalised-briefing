@@ -8,6 +8,7 @@ the source table, never from the model (M7, S8, S14).
 import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from datetime import date
 from urllib.parse import urlsplit
 
 from briefing.models import (
@@ -109,10 +110,14 @@ def _safe_url(url: str) -> str:
     return url
 
 
+def _host(url: str) -> str:
+    """The site of a URL without a leading `www.`, or an empty string if it has none."""
+    return (urlsplit(url).hostname or "").removeprefix("www.")
+
+
 def _site_name(url: str) -> str:
     """Name a source by its site, for pages whose title is missing or is just their address."""
-    host = urlsplit(url).hostname or ""
-    return host.removeprefix("www.") or "Untitled source"
+    return _host(url) or "Untitled source"
 
 
 def render_markdown(
@@ -120,6 +125,7 @@ def render_markdown(
     topics: Sequence[Topic],
     checked: CheckedDraft,
     source_titles: Mapping[str, str],
+    source_dates: Mapping[str, date | None] | None = None,
 ) -> tuple[str, list[BriefingSource]]:
     """Render the checked draft as Markdown with numbered citations and a Sources list (M6, M7).
 
@@ -128,6 +134,7 @@ def render_markdown(
         topics: The persona's topics, for section headings.
         checked: Output of `validate_draft`.
         source_titles: Title of each source, by URL.
+        source_dates: Publication date of each source, by URL, passed through to the result.
 
     Returns:
         The Markdown, and the cited sources in citation-number order. Numbers follow the
@@ -147,14 +154,23 @@ def render_markdown(
             lines.append(f"- {_escape(bullet.text)} {links}")
         lines.append("")
 
+    dates = source_dates or {}
     sources = [
         BriefingSource(
-            number=number, title=plain_text(source_titles[url]) or _site_name(url), url=url
+            number=number,
+            title=plain_text(source_titles[url]) or _site_name(url),
+            url=url,
+            published=dates.get(url),
         )
         for url, number in numbers.items()
     ]
     lines += ["## Sources", ""]
-    lines += [f"{s.number}. [{_escape(s.title)}]({_safe_url(s.url)})" for s in sources]
+    for s in sources:
+        site = _host(s.url)
+        # The site next to the title lets a reader judge a source at a glance. A title that
+        # is already the site name would only repeat it.
+        suffix = f" · {_escape(site)}" if site and s.title != site else ""
+        lines.append(f"{s.number}. [{_escape(s.title)}]({_safe_url(s.url)}){suffix}")
     return "\n".join(lines) + "\n", sources
 
 

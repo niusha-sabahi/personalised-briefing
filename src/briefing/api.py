@@ -36,12 +36,16 @@ SECURITY_HEADERS = {
     ),
     "X-Content-Type-Options": "nosniff",
     "Referrer-Policy": "no-referrer",
+    # Browsers may reuse a stylesheet or icon for a long time without asking. This makes them
+    # check each time (a cheap 304 when nothing changed), so a style change shows on reload.
+    "Cache-Control": "no-cache",
 }
 
 # Windows can map .js to text/plain through the registry, and with `nosniff` the browser
 # would then refuse to run the scripts.
 mimetypes.add_type("text/javascript", ".js")
 mimetypes.add_type("text/css", ".css")
+mimetypes.add_type("image/svg+xml", ".svg")
 
 
 class HealthResponse(BaseModel):
@@ -148,7 +152,7 @@ def create_app(
     service = BriefingService.from_settings(settings, taxonomy, embedder, generator)
 
     secrets = (settings.openai_api_key.get_secret_value(),)
-    app = FastAPI(title="Personalised Briefing", version="0.1.0")
+    app = FastAPI(title="Executive Briefing", version="0.1.0")
     for exc_class, status, message in _ERROR_MAP:
         app.add_exception_handler(exc_class, _error_handler(status, message, secrets))
     app.add_exception_handler(Exception, _unexpected_error_handler(secrets))
@@ -217,7 +221,8 @@ def create_app(
             )
         result = service.briefing_for(persona)
         if format == "json":
-            return JSONResponse(result.model_dump())
+            # JSON mode makes dates and times ISO strings; plain `model_dump` leaves objects.
+            return JSONResponse(result.model_dump(mode="json"))
         return Response(content=result.markdown, media_type=MARKDOWN_TYPE)
 
     return app

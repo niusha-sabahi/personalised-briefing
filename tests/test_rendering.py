@@ -1,3 +1,5 @@
+from datetime import date
+
 import pytest
 
 from briefing.models import (
@@ -124,13 +126,35 @@ def test_markdown_has_title_sections_bullets_and_sources() -> None:
         "## Topic B\n\n"
         "- Beta. [\\[2\\]](https://x.test/two)\n\n"
         "## Sources\n\n"
-        "1. [First page](https://x.test/one)\n"
-        "2. [Second page](https://x.test/two)\n"
+        "1. [First page](https://x.test/one) · x.test\n"
+        "2. [Second page](https://x.test/two) · x.test\n"
     )
     assert [(s.number, s.url) for s in sources] == [
         (1, "https://x.test/one"),
         (2, "https://x.test/two"),
     ]
+
+
+def test_sources_name_their_site_unless_the_title_already_does() -> None:
+    passages = [
+        Passage(id="s1p1", source_url="https://www.x.test/a", text="t", topic_id="a", score=1),
+        Passage(id="s2p1", source_url="https://y.test/b", text="t", topic_id="a", score=1),
+        Passage(id="s3p1", source_url="not a url", text="t", topic_id="a", score=1),
+    ]
+    sections = ("a", [("One.", ["s1p1"]), ("Two.", ["s2p1"]), ("Three.", ["s3p1"])])
+    checked = validate_draft(draft(sections), passages, ["a"])
+    titles = {"https://www.x.test/a": "Title A", "https://y.test/b": "", "not a url": "Title C"}
+    markdown, _ = render_markdown(PERSONA, TOPICS, checked, titles)
+    assert "1. [Title A](https://www.x.test/a) · x.test\n" in markdown
+    assert "2. [y.test](https://y.test/b)\n" in markdown  # the title is the site already
+    assert "3. [Title C](not%20a%20url)\n" in markdown  # no site to show
+
+
+def test_the_publication_dates_are_passed_through_to_the_sources() -> None:
+    checked = check(("a", [("Alpha.", ["s1p1"])]), ("b", [("Beta.", ["s2p1"])]))
+    dates = {"https://x.test/one": date(2025, 4, 20)}
+    _, sources = render_markdown(PERSONA, TOPICS, checked, TITLES, dates)
+    assert [s.published for s in sources] == [date(2025, 4, 20), None]
 
 
 def test_numbers_follow_first_citation_and_only_cited_sources_are_listed() -> None:

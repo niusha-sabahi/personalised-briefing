@@ -17,7 +17,8 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_URL = "http://127.0.0.1:8000"
 _LINK = re.compile(r"\]\((https?://[^)\s]+)\)")
-_SOURCE_LINE = re.compile(r"^(\d+)\. \[.*\]\((https?://[^)\s]+)\)$")
+# A numbered source: its linked title, then optionally " · site".
+_SOURCE_LINE = re.compile(r"^(\d+)\. \[.*\]\((https?://[^)\s]+)\)(?: · \S+)?$")
 
 
 def fetch(base_url: str, path: str, timeout: float = 30) -> tuple[int, dict[str, str], bytes]:

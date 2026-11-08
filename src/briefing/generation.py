@@ -149,7 +149,11 @@ def generate_briefing(
         raise GenerationError("The model's answer contained no bullet backed by a source passage.")
 
     titles = {s.prepared.source.url: s.prepared.source.title for s in context.sources}
-    markdown, sources = render_markdown(persona, persona_topics, checked, titles)
+    dates = {
+        s.prepared.source.url: s.prepared.published.value if s.prepared.published else None
+        for s in context.sources
+    }
+    markdown, sources = render_markdown(persona, persona_topics, checked, titles, dates)
     stray = foreign_urls(markdown, list(titles))
     if stray:
         raise GenerationError("The briefing contained a link that is not a selected source.")

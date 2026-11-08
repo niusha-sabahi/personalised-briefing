@@ -1,4 +1,5 @@
 import hashlib
+import re
 from html.parser import HTMLParser
 from pathlib import Path
 
@@ -59,7 +60,13 @@ def test_root_serves_the_page_with_security_headers(client: TestClient) -> None:
     response = client.get("/")
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("text/html")
-    assert "Personalised Briefing" in response.text
+    # The browser tab shows the same name as the banner heading.
+    assert "<title>Executive Briefing</title>" in response.text
+    # A banner at the top holds the title and a one-line description of the tool.
+    banner = re.search(r'<header class="banner">(.*?)</header>', response.text, re.DOTALL)
+    assert banner and "<h1>Executive Briefing</h1>" in banner.group(1)
+    assert "every claim sourced" in banner.group(1)
+    assert '<p class="prompt" id="personas-label">Select a persona:</p>' in response.text
     csp = response.headers["content-security-policy"]
     assert "default-src 'none'" in csp and "script-src 'self'" in csp
     assert "frame-ancestors 'none'" in csp and "unsafe-inline" not in csp
@@ -77,6 +84,7 @@ def test_page_has_no_inline_script_style_or_handlers(client: TestClient) -> None
         "/static/vendor/marked.umd.js",
         "/static/vendor/purify.min.js",
         "/static/render.js",
+        "/static/meta.js",
         "/static/app.js",
     ]
 
@@ -87,6 +95,7 @@ def test_every_asset_the_page_loads_is_served_with_the_right_type(client: TestCl
         "/static/style.css": "text/css",
         "/static/app.js": "text/javascript",
         "/static/render.js": "text/javascript",
+        "/static/meta.js": "text/javascript",
         "/static/vendor/marked.umd.js": "text/javascript",
         "/static/vendor/purify.min.js": "text/javascript",
     }
@@ -95,6 +104,24 @@ def test_every_asset_the_page_loads_is_served_with_the_right_type(client: TestCl
         assert response.status_code == 200, path
         assert response.headers["content-type"].startswith(content_type), path
         assert response.headers["x-content-type-options"] == "nosniff"
+
+
+def test_the_tab_icon_is_served_from_the_app_itself(client: TestClient) -> None:
+    page = client.get("/").text
+    assert '<link rel="icon" type="image/svg+xml" href="/static/favicon.svg">' in page
+    response = client.get("/static/favicon.svg")
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("image/svg+xml")
+    # An icon is an image: it must carry no script or external reference.
+    body = response.text.lower()
+    assert "<script" not in body and "onload" not in body and "href" not in body
+    assert body.count("http") == 1  # only the SVG namespace
+
+
+def test_the_page_and_its_assets_are_revalidated_on_every_load(client: TestClient) -> None:
+    for path in ("/", "/static/style.css", "/static/favicon.svg"):
+        assert client.get(path).headers["cache-control"] == "no-cache", path
+    assert "cache-control" not in client.get("/health").headers
 
 
 def test_api_and_docs_are_not_given_the_page_policy(client: TestClient) -> None:
@@ -109,9 +136,47 @@ def test_the_page_is_not_part_of_the_api_reference(client: TestClient) -> None:
 
 def test_page_talks_only_to_the_apis_json_endpoints() -> None:
     source = (STATIC_DIR / "app.js").read_text(encoding="utf-8")
-    assert '"/personas"' in source and "?format=json" in source
+    assert '"/personas"' in source and '"/topics"' in source and "?format=json" in source
     assert "innerHTML" in source  # only for sanitised briefing HTML
     assert source.count("innerHTML") == 1
+
+
+def test_the_personas_are_a_radio_group_that_can_be_used_from_the_keyboard(
+    client: TestClient,
+) -> None:
+    assert '<div id="personas" role="radiogroup" aria-labelledby="personas-label">' in (
+        client.get("/").text
+    )
+    source = (STATIC_DIR / "app.js").read_text(encoding="utf-8")
+    assert '"role", "radio"' in source and "aria-checked" in source
+    assert "aria-pressed" not in source
+    for key in ("ArrowRight", "ArrowLeft", "ArrowDown", "ArrowUp", "Home", "End"):
+        assert key in source, key
+    # The arrow keys must only move focus: choosing a persona starts a (paid) briefing.
+    move = source[source.index("function moveFocus") : source.index("async function showBriefing")]
+    assert "showBriefing" not in move and ".click(" not in move
+
+
+def test_nothing_but_the_sanitised_briefing_is_inserted_as_html() -> None:
+    for name in ("app.js", "meta.js"):
+        source = (STATIC_DIR / name).read_text(encoding="utf-8")
+        for sink in ("outerHTML", "insertAdjacentHTML", "document.write", "eval(", "new Function"):
+            assert sink not in source, (name, sink)
+    # The strip, the persona cards and the status line are built from text, never from markup.
+    assert "innerHTML" not in (STATIC_DIR / "meta.js").read_text(encoding="utf-8")
+
+
+def test_the_page_has_a_metadata_strip_and_a_logo(client: TestClient) -> None:
+    page = client.get("/").text
+    assert '<p id="meta" class="meta" hidden></p>' in page
+    assert '<img class="logo" src="/static/favicon.svg" alt=""' in page  # decorative: empty alt
+
+
+def test_the_stylesheet_covers_printing_and_reduced_motion() -> None:
+    css = (STATIC_DIR / "style.css").read_text(encoding="utf-8")
+    assert "@media print" in css and "attr(href)" in css  # links are spelled out on paper
+    assert "prefers-reduced-motion" in css  # the spinner stops for people who ask
+    assert "@import" not in css and "url(http" not in css  # nothing from another site
 
 
 # --- vendored libraries ---------------------------------------------------------------------------
