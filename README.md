@@ -172,7 +172,7 @@ The retrieval settings were set from real data with the live API, and are docume
 
 ## Work completed
 
-**Status:** all 40 requirements (20 Must, 20 Should) in [REQUIREMENTS.md](REQUIREMENTS.md) are complete and verified. The code is in a private GitHub repository with CI green. The pipeline was tuned and checked against the real OpenAI models, and both personas' briefings were read and judged by hand five times.
+**Status:** all 40 requirements (20 Must, counting the four sub-requirements of M3, and 20 Should) in [REQUIREMENTS.md](REQUIREMENTS.md) are complete and verified. The code is in a private GitHub repository with CI green. The pipeline was tuned and checked against the real OpenAI models, and both personas' briefings were read and judged by hand five times.
 
 ### What was built
 
