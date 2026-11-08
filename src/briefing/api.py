@@ -1,12 +1,15 @@
 """FastAPI application: health, taxonomy and persona briefings."""
 
 import logging
-from collections.abc import Callable
+import mimetypes
+from collections.abc import Awaitable, Callable
+from pathlib import Path
 from typing import Literal
 
 import openai
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import JSONResponse, Response
+from fastapi.responses import FileResponse, JSONResponse, Response
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from briefing.config import Settings
@@ -19,6 +22,24 @@ from briefing.topics import load_taxonomy
 logger = logging.getLogger(__name__)
 
 MARKDOWN_TYPE = "text/markdown; charset=utf-8"
+STATIC_DIR = Path(__file__).parent / "static"
+
+# Sent with the page and its assets (S8). The page needs nothing but its own scripts, styles
+# and API, so everything else is refused: injected markup could not run script or load
+# resources even if sanitising failed. `/docs` is left alone because it loads its own assets.
+SECURITY_HEADERS = {
+    "Content-Security-Policy": (
+        "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; "
+        "connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
+    ),
+    "X-Content-Type-Options": "nosniff",
+    "Referrer-Policy": "no-referrer",
+}
+
+# Windows can map .js to text/plain through the registry, and with `nosniff` the browser
+# would then refuse to run the scripts.
+mimetypes.add_type("text/javascript", ".js")
+mimetypes.add_type("text/css", ".css")
 
 
 class HealthResponse(BaseModel):
@@ -100,6 +121,21 @@ def create_app(
     for exc_class, status, message in _ERROR_MAP:
         app.add_exception_handler(exc_class, _error_handler(status, message))
     app.add_exception_handler(Exception, _unexpected_error)
+
+    @app.middleware("http")
+    async def add_security_headers(
+        request: Request, call_next: Callable[[Request], Awaitable[Response]]
+    ) -> Response:
+        response = await call_next(request)
+        if request.url.path == "/" or request.url.path.startswith("/static/"):
+            response.headers.update(SECURITY_HEADERS)
+        return response
+
+    @app.get("/", include_in_schema=False)
+    def frontend() -> FileResponse:
+        return FileResponse(STATIC_DIR / "index.html", media_type="text/html; charset=utf-8")
+
+    app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
     @app.get("/health", response_model=HealthResponse, summary="Liveness check")
     def health() -> HealthResponse:

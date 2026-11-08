@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Personalised Briefing</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header>
+    <h1>Personalised Briefing</h1>
+    <p>Choose who the briefing is for.</p>
+  </header>
+  <main>
+    <div id="personas" role="group" aria-label="Personas"></div>
+    <p id="status" role="status" aria-live="polite"></p>
+    <article id="briefing" tabindex="-1" aria-busy="false"></article>
+  </main>
+  <script src="/static/vendor/marked.umd.js"></script>
+  <script src="/static/vendor/purify.min.js"></script>
+  <script src="/static/render.js"></script>
+  <script src="/static/app.js"></script>
+</body>
+</html>

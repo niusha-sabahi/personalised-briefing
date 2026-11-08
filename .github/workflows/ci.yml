@@ -15,4 +15,8 @@ jobs:
       - run: uv run ruff format --check
       - run: uv run ruff check
       - run: uv run mypy src
+      # The runner image ships Chrome; REQUIRE_BROWSER makes a missing browser fail the
+      # sanitiser tests instead of skipping them.
       - run: uv run pytest --cov
+        env:
+          REQUIRE_BROWSER: "1"

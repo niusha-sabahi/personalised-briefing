@@ -27,7 +27,7 @@ Status: `[ ]` not started · `[~]` in progress or partly done · `[x]` complete 
 
 **Application**
 - [x] M9. Backend is a FastAPI server exposing at least: `GET /health`, `GET /topics` (the taxonomy), and an endpoint that returns a persona's briefing as Markdown (for example `GET /briefings/{persona_id}`, with `persona_id` being `healthcare-policy-analyst` or `tech-founder`).
-- [ ] M10. A minimal frontend (any framework) that selects a persona and renders the Markdown briefing.
+- [x] M10. A minimal frontend (any framework) that selects a persona and renders the Markdown briefing.
 - [~] M11. The OpenAI key is read from the environment or `.env`. It is never committed or logged, and `.env` stays gitignored.
 
 **Project and delivery**
@@ -60,7 +60,7 @@ Status: `[ ]` not started · `[~]` in progress or partly done · `[x]` complete 
 **Configuration and security**
 - [x] S6. Settings are loaded with `pydantic-settings`: API key, model names, tagging threshold, max tags per source, top-k, per-topic minimum, cutoff date, and cache path. No hard-coded secrets or model names in code.
 - [~] S7. The key is wrapped as `SecretStr`. Logs and error responses never contain it. Check git history for a leaked key before pushing.
-- [~] S8. Source text is untrusted. The prompt separates instructions from source content and tells the model to ignore instructions found inside sources. Generated Markdown is sanitised or escaped when rendered in the frontend.
+- [x] S8. Source text is untrusted. The prompt separates instructions from source content and tells the model to ignore instructions found inside sources. Generated Markdown is sanitised or escaped when rendered in the frontend.
 - [x] S9. Pydantic models validate request and response shapes, and validate the topic and persona data files at startup (unique topic ids, every persona topic id exists in the taxonomy). Path parameters are restricted to known personas, and unknown ones return 404.
 
 **Correctness and robustness**

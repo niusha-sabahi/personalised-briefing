@@ -1,0 +1,62 @@
+:root {
+  --bg: #ffffff;
+  --text: #1c1f23;
+  --muted: #5b6470;
+  --accent: #1f5fbf;
+  --border: #d5dae1;
+  --surface: #f4f6f9;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #14171b;
+    --text: #e6e9ed;
+    --muted: #9aa4b1;
+    --accent: #7fb0f5;
+    --border: #2f353d;
+    --surface: #1d2127;
+  }
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 16px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+header, main {
+  max-width: 46rem;
+  margin: 0 auto;
+  padding: 1rem;
+}
+
+header h1 { margin: 1rem 0 0.25rem; font-size: 1.6rem; }
+header p { margin: 0; color: var(--muted); }
+
+#personas { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 0.5rem 0 1rem; }
+
+button {
+  font: inherit;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  padding: 0.5rem 0.9rem;
+  cursor: pointer;
+}
+
+button:hover { border-color: var(--accent); }
+button[aria-pressed="true"] { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+button:focus-visible, a:focus-visible, #briefing:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+#status { min-height: 1.6rem; color: var(--muted); }
+button.retry { padding: 0.15rem 0.6rem; }
+
+#briefing { padding: 0 0 3rem; }
+#briefing h1 { font-size: 1.4rem; margin: 0.5rem 0 1rem; }
+#briefing h2 { font-size: 1.15rem; margin: 1.8rem 0 0.5rem; padding-bottom: 0.25rem; border-bottom: 1px solid var(--border); }
+#briefing li { margin: 0.5rem 0; }
+#briefing a { color: var(--accent); }
