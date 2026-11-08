@@ -35,8 +35,15 @@ under the section it fits best, and do not repeat it in another section.
 5. Each bullet is one or two sentences stating a concrete development, finding or figure, \
 worded for this reader. Prefer specific recent developments (announcements, deals, rules, \
 named organisations, numbers) over general background or descriptions of a product or \
-service, and include the dates, figures and names the passage gives. Do not copy long phrases \
-from a passage.
+service, and include the dates, figures and names the passage gives. Each bullet must stand \
+alone, because the reader may see it without the bullets around it. Begin with its specific \
+subject, using the full name from the passage (the organisation, law, bill, programme, \
+product, place or person), and say who announced, found or did it. Repeat the full name in \
+every bullet about it, even if an earlier bullet already used it. Never start with or rely on \
+a bare "the order", "the report", "the bill", "the case", "the rule", "the study", "an \
+analysis" or "it". Wrong: "The order directs HHS to hold listening sessions." Right: "The \
+April 15, 2025 drug pricing executive order directs HHS to hold listening sessions." Do not \
+copy long phrases from a passage.
 6. Every bullet must list in passage_ids the id of each passage it is based on. Cite only ids \
 that appear in the input. If passages disagree, say so and cite both.
 7. Write plain sentences only: no links, no URLs, no Markdown and no citation numbers in the \

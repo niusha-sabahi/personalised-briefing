@@ -95,6 +95,10 @@ def test_system_prompt_states_the_safety_and_relevance_rules() -> None:
     assert "do not write about a publication itself" in text  # "an April 11 publication said"
     assert "no speculation about relevance" in text  # "may support early-stage product execution"
     assert "state each development once" in text  # the Supreme Court case was in two sections
+    assert "must stand alone" in text  # a bullet began "The order directs HHS…"
+    # The first rule did not work live: bullets still said "The executive order directs HHS…"
+    assert "full name" in text and "repeat the full name in every bullet" in text
+    assert "wrong:" in text and "right:" in text  # a worked example
 
 
 # --- OpenAIGenerator -----------------------------------------------------------------------

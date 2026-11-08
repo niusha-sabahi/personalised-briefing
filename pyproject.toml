@@ -62,9 +62,9 @@ plugins = ["pydantic.mypy"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-ra"
+addopts = "-ra -m 'not integration'"
 markers = [
-    "integration: runs against the live OpenAI API; skipped without OPENAI_API_KEY",
+    "integration: opt-in, calls the live OpenAI API and costs a few cents; run with pytest -m integration",
 ]
 
 [tool.coverage.run]

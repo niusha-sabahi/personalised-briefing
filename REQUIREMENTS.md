@@ -28,7 +28,7 @@ Status: `[ ]` not started · `[~]` in progress or partly done · `[x]` complete 
 **Application**
 - [x] M9. Backend is a FastAPI server exposing at least: `GET /health`, `GET /topics` (the taxonomy), and an endpoint that returns a persona's briefing as Markdown (for example `GET /briefings/{persona_id}`, with `persona_id` being `healthcare-policy-analyst` or `tech-founder`).
 - [x] M10. A minimal frontend (any framework) that selects a persona and renders the Markdown briefing.
-- [~] M11. The OpenAI key is read from the environment or `.env`. It is never committed or logged, and `.env` stays gitignored.
+- [x] M11. The OpenAI key is read from the environment or `.env`. It is never committed or logged, and `.env` stays gitignored.
 
 **Project and delivery**
 - [x] M12. A uv project: `pyproject.toml` plus a committed `uv.lock`, a `.python-version` file, and a `.venv/` created by `uv sync`. All commands run through the venv (`uv run ...`).
@@ -59,7 +59,7 @@ Status: `[ ]` not started · `[~]` in progress or partly done · `[x]` complete 
 
 **Configuration and security**
 - [x] S6. Settings are loaded with `pydantic-settings`: API key, model names, tagging threshold, max tags per source, top-k, per-topic minimum, cutoff date, and cache path. No hard-coded secrets or model names in code.
-- [~] S7. The key is wrapped as `SecretStr`. Logs and error responses never contain it. Check git history for a leaked key before pushing.
+- [x] S7. The key is wrapped as `SecretStr`. Logs and error responses never contain it. Check git history for a leaked key before pushing.
 - [x] S8. Source text is untrusted. The prompt separates instructions from source content and tells the model to ignore instructions found inside sources. Generated Markdown is sanitised or escaped when rendered in the frontend.
 - [x] S9. Pydantic models validate request and response shapes, and validate the topic and persona data files at startup (unique topic ids, every persona topic id exists in the taxonomy). Path parameters are restricted to known personas, and unknown ones return 404.
 
@@ -74,8 +74,8 @@ Status: `[ ]` not started · `[~]` in progress or partly done · `[x]` complete 
 **Testing**
 - [~] S16. Unit tests with the OpenAI client mocked, covering: date extraction (URL form, text form, missing, malformed), the cutoff boundary (2025-04-05 excluded, 2025-04-06 included), text cleaning, multi-label tagging (several tags, no tags, threshold boundary, tag cap), persona selection from tags (union across topics, per-topic minimum, top-k, tie-break), citation validation, and taxonomy and persona validation (duplicate topic id, unknown topic id in a persona).
 - [x] S17. API tests with FastAPI `TestClient` covering: `/health`, a valid persona, an unknown persona (404), OpenAI failure (502 or 503), and the empty-results case.
-- [~] S18. Data-integrity tests over the real JSON: no selected source predates the cutoff, and every required topic in M3.1 exists in the taxonomy. With the live API (opt-in), each required topic has at least one tagged source.
-- [ ] S19. One opt-in integration test (marked, skipped without a key) that runs the whole pipeline against the live API and checks that the output is non-empty Markdown with valid references.
+- [x] S18. Data-integrity tests over the real JSON: no selected source predates the cutoff, and every required topic in M3.1 exists in the taxonomy. With the live API (opt-in), each required topic has at least one tagged source.
+- [x] S19. One opt-in integration test (marked, skipped without a key) that runs the whole pipeline against the live API and checks that the output is non-empty Markdown with valid references.
 
 **Documentation**
 - [~] S20. The README has a short architecture overview (one paragraph or a small diagram of the flow: clean, embed, tag, retrieve, generate, validate citations) that matches the code. Endpoints have a `summary`, response models and error responses so `/docs` serves as the API reference. Config options are documented once, in `.env.example` and the settings class.

@@ -98,8 +98,15 @@ class EchoGenerator:
 
 
 @pytest.fixture(autouse=True)
-def _isolate_settings_from_environment(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Clear every setting from the environment, so a developer's values cannot affect a test."""
+def _isolate_settings_from_environment(
+    monkeypatch: pytest.MonkeyPatch, request: pytest.FixtureRequest
+) -> None:
+    """Clear every setting from the environment, so a developer's values cannot affect a test.
+
+    Live tests are the exception: they exist to use the real settings.
+    """
+    if request.node.get_closest_marker("integration"):
+        return
     for name in Settings.model_fields:
         monkeypatch.delenv(name.upper(), raising=False)
 

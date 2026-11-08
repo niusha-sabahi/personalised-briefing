@@ -3,7 +3,8 @@
 import logging
 import mimetypes
 import re
-from collections.abc import Awaitable, Callable
+import traceback
+from collections.abc import Awaitable, Callable, Sequence
 from pathlib import Path
 from typing import Literal
 
@@ -64,12 +65,21 @@ def configure_logging(level: str) -> None:
 _KEY_LIKE = re.compile(r"\b(?:sk|pk|rk)-[^\s'\",)]+|Bearer\s+\S+", re.IGNORECASE)
 
 
-def mask_secrets(text: str) -> str:
-    """Replace anything that looks like an API key or bearer token with a placeholder."""
+def mask_secrets(text: str, secrets: Sequence[str] = ()) -> str:
+    """Hide the configured secrets, and anything shaped like a key or bearer token, in `text`.
+
+    The configured values are replaced exactly, so the key is hidden even if it does not look
+    like a key; the pattern catches any other key a provider message might echo.
+    """
+    for secret in secrets:
+        if secret:
+            text = text.replace(secret, "[masked]")
     return _KEY_LIKE.sub("[masked]", text)
 
 
-def _error_handler(status: int, message: str) -> Callable[[Request, Exception], JSONResponse]:
+def _error_handler(
+    status: int, message: str, secrets: Sequence[str]
+) -> Callable[[Request, Exception], JSONResponse]:
     def handle(request: Request, exc: Exception) -> JSONResponse:
         # At INFO and above only the exception class and HTTP status are logged for provider
         # errors: their messages can echo fragments of the API key.
@@ -84,15 +94,23 @@ def _error_handler(status: int, message: str) -> Callable[[Request, Exception], 
         )
         # The provider's own message is what says which request parameter it rejected, so it
         # is available when debugging, with key-like text masked. It is never in a response.
-        logger.debug("Detail with key-like text masked: %s", mask_secrets(str(exc)))
+        logger.debug("Detail with secrets masked: %s", mask_secrets(str(exc), secrets))
         return JSONResponse(status_code=status, content={"detail": message})
 
     return handle
 
 
-def _unexpected_error(request: Request, exc: Exception) -> JSONResponse:
-    logger.error("Unexpected error on %s", request.url.path, exc_info=exc)
-    return JSONResponse(status_code=500, content={"detail": "Internal server error."})
+def _unexpected_error_handler(
+    secrets: Sequence[str],
+) -> Callable[[Request, Exception], JSONResponse]:
+    def handle(request: Request, exc: Exception) -> JSONResponse:
+        # The traceback is logged as text, with secrets masked, because the exception message
+        # at its end could contain one.
+        trace = "".join(traceback.format_exception(exc))
+        logger.error("Unexpected error on %s\n%s", request.url.path, mask_secrets(trace, secrets))
+        return JSONResponse(status_code=500, content={"detail": "Internal server error."})
+
+    return handle
 
 
 # Most specific first is not required: Starlette picks the handler for the closest class.
@@ -129,10 +147,11 @@ def create_app(
     taxonomy = load_taxonomy(settings.topics_path, settings.personas_path)
     service = BriefingService.from_settings(settings, taxonomy, embedder, generator)
 
+    secrets = (settings.openai_api_key.get_secret_value(),)
     app = FastAPI(title="Personalised Briefing", version="0.1.0")
     for exc_class, status, message in _ERROR_MAP:
-        app.add_exception_handler(exc_class, _error_handler(status, message))
-    app.add_exception_handler(Exception, _unexpected_error)
+        app.add_exception_handler(exc_class, _error_handler(status, message, secrets))
+    app.add_exception_handler(Exception, _unexpected_error_handler(secrets))
 
     @app.middleware("http")
     async def add_security_headers(

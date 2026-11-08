@@ -7,6 +7,7 @@ import httpx
 import openai
 import pytest
 from fastapi.testclient import TestClient
+from pydantic import SecretStr
 
 from briefing.api import create_app, mask_secrets
 from briefing.config import Settings
@@ -217,6 +218,47 @@ def test_debug_logging_explains_a_rejection_with_key_like_text_masked(
     assert "sk-proj" not in caplog.text and "eyJhbGciOi" not in caplog.text
     assert "[masked]" in caplog.text
     assert "Unsupported parameter" not in response.text  # never in a response
+
+
+PLAIN_KEY = "plain-key-without-the-usual-prefix-9876"
+
+
+def test_the_configured_key_is_masked_even_when_it_does_not_look_like_a_key(
+    settings: Settings, caplog: pytest.LogCaptureFixture
+) -> None:
+    custom = settings.model_copy(update={"openai_api_key": SecretStr(PLAIN_KEY)})
+    for error in (
+        openai.BadRequestError(
+            f"Rejected the credential {PLAIN_KEY} for this project",
+            response=httpx.Response(400, request=_REQUEST),
+            body=None,
+        ),
+        GenerationError(f"model said {PLAIN_KEY}"),
+        RuntimeError(f"a bug that mentions {PLAIN_KEY}"),
+    ):
+        env = Env(custom, RaisingGenerator(error))
+        with caplog.at_level(logging.DEBUG, logger="briefing"):
+            response = env.client.get("/briefings/analyst")
+        assert PLAIN_KEY not in response.text
+    assert PLAIN_KEY not in caplog.text
+    assert "[masked]" in caplog.text
+
+
+def test_no_log_line_contains_the_key_during_normal_use(
+    settings: Settings, caplog: pytest.LogCaptureFixture
+) -> None:
+    custom = settings.model_copy(update={"openai_api_key": SecretStr(PLAIN_KEY)})
+    with caplog.at_level(logging.DEBUG):
+        env = Env(custom)
+        for path in ("/health", "/topics", "/personas", "/briefings/analyst", "/briefings/nobody"):
+            env.client.get(path)
+    assert PLAIN_KEY not in caplog.text
+    assert repr(custom).count(PLAIN_KEY) == 0 and str(custom).count(PLAIN_KEY) == 0
+
+
+def test_mask_secrets_hides_exact_values_and_key_shaped_text() -> None:
+    masked = mask_secrets("a b-c-d and sk-proj-xyz", secrets=("b-c-d", ""))
+    assert masked == "a [masked] and [masked]"
 
 
 def test_mask_secrets_leaves_ordinary_text_alone() -> None:
