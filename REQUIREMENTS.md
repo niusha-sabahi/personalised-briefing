@@ -8,7 +8,7 @@ Status: `[ ]` not started · `[~]` in progress or partly done · `[x]` complete 
 
 **Briefing behaviour**
 - [x] M1. Generate one briefing per persona: Healthcare Policy Analyst (USA) and Tech Startup Founder (London). A persona is data: an id, a position, a location, and a list of topic ids (see M3.1). A persona's briefing is built from sources tagged with those topics.
-- [~] M2. Use only sources from `sources_06-05-25.json`. Do not fetch anything else.
+- [x] M2. Use only sources from `sources_06-05-25.json`. Do not fetch anything else.
 - [x] M3. Sources are embedded and organised by topic tag, not by persona. Embeddings and tags never reference a persona, so a new persona only needs a new list of topic ids.
   - [x] M3.1. Topic taxonomy: a committed data file (for example `topics.yaml`) where each topic has a stable `id`, a `label`, and a short `description` used for embedding. It must include at least these topics, taken from the persona interests in task.md: healthcare reform, public health data, telemedicine, pharmaceutical innovation, health equity, government policy updates, artificial intelligence, venture capital, startup funding, SaaS trends, product management. Extra topics are allowed and are not limited to these.
   - [x] M3.2. Embed each source (once, using cleaned text) and each topic description with an OpenAI embedding model. For the sources selected for a briefing, also embed their passages (paragraph-sized chunks, cached) so only passages related to the persona's topics reach the model (M8).
@@ -32,8 +32,8 @@ Status: `[ ]` not started · `[~]` in progress or partly done · `[x]` complete 
 
 **Project and delivery**
 - [x] M12. A uv project: `pyproject.toml` plus a committed `uv.lock`, a `.python-version` file, and a `.venv/` created by `uv sync`. All commands run through the venv (`uv run ...`).
-- [~] M13. Plain Python only, with no notebooks.
-- [~] M14. `README.md` covers prerequisites, setup (`uv sync`, copy `.env.example` to `.env`), how to run the server and frontend, how to call the API, and how to run the tests.
+- [x] M13. Plain Python only, with no notebooks.
+- [x] M14. `README.md` covers prerequisites, setup (`uv sync`, copy `.env.example` to `.env`), how to run the server and frontend, how to call the API, and how to run the tests.
 - [x] M15. Extension: an Agent Skill (a `SKILL.md` with name and description frontmatter, following agentskills.io) that lets a coding agent set up, start and test the application, including calling the endpoints and checking that the output is valid.
 - [~] M16. Deliver everything as one private GitHub repository. The repo root is the project root (the existing `takehome/` git repo, with its `origin` remote), and it contains all of the following, committed:
   - Backend source in `src/`, the frontend, and `tests/`.
@@ -54,7 +54,7 @@ Status: `[ ]` not started · `[~]` in progress or partly done · `[x]` complete 
 - [~] S1. `src/` layout with a named package, for example `src/briefing/`, split into modules: `config`, `sources` (load, clean, date), `topics` (taxonomy and personas), `embeddings`, `tagging` (multi-label assignment), `retrieval` (persona selection from tags), `generation`, `api`, `models`. `pyproject.toml` defines the package and a script entry point.
 - [x] S2. Dependencies are split into runtime and dev groups (`uv add --dev`). Dev tools: `ruff` (lint and format), `mypy` or `pyright` (type checking), `pytest`, `pytest-asyncio` or `httpx` for API tests, and `pytest-cov`.
 - [x] S3. Ruff and the type checker are configured in `pyproject.toml`. Both must pass with zero errors, and type hints are used throughout. Ruff enables the `D` (pydocstyle) rules with the Google convention, so a missing or malformed docstring on a public module, function, class or method fails lint.
-- [~] S4. Pre-commit hooks (ruff format and check, type check, and the test suite without the live-API test) and CI (a GitHub Actions workflow running `uv sync --locked`, lint, type check and tests).
+- [x] S4. Pre-commit hooks (ruff format and check, type check, and the test suite without the live-API test) and CI (a GitHub Actions workflow running `uv sync --locked`, lint, type check and tests).
 - [x] S5. A `.env.example` with placeholder values, and `.gitignore` entries for `.venv/`, `.env`, caches and coverage output.
 
 **Configuration and security**

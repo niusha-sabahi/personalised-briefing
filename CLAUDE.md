@@ -118,7 +118,7 @@ serve:  persona topics -> select top-k tagged sources -> extract relevant passag
 | 7 | Frontend | M10, S8 | Done offline (both complete; sanitiser tested in a real headless browser) |
 | 8 | Hardening: live integration test, data-integrity tests, CI and pre-commit verified, key-leak check | S18, S19, S4, S7, M11 | Done (S7, M11, S18 and S19 complete; the user's live run of `pytest -m integration` passed all 3 tests in 48 s; S4 waits for CI to run on GitHub) |
 | 9 | Agent Skill | M15 | Done (M15 complete: tested against a fake-model server, and the user's live run of `check_app.py --start` passed all 9 checks) |
-| 10 | Delivery: private repo, push, fresh-clone check; then optional C items (Docker, task aliases) | M14, M16, S20, C1, C5 | Not started |
+| 10 | Delivery: private repo, push, fresh-clone check; then optional C items (Docker, task aliases) | M14, M16, S20, C1, C5 | In progress (history key search clean, tracked files audited, and a fresh local clone passed setup, `briefing topics`, lint, type check and all 369 tests, so M14 is complete; the repo is on GitHub and CI is green, so S4 is complete; the push of the last commits and the final check of M16 remain) |
 
 **Decisions made**
 - Generation model id is `gpt-5.6-luna` (confirmed by the user). It has **no temperature setting**: never send `temperature` (or other sampling parameters) to it. Keep generation deterministic by other means (structured output, fixed prompts, stable ordering), and make any generation parameter optional in config.
