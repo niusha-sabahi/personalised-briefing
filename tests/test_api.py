@@ -8,7 +8,7 @@ import openai
 import pytest
 from fastapi.testclient import TestClient
 
-from briefing.api import create_app
+from briefing.api import create_app, mask_secrets
 from briefing.config import Settings
 from briefing.generation import GenerationError
 from briefing.models import BriefingDraft
@@ -106,6 +106,14 @@ def test_no_relevant_sources_gives_a_clear_404(env: Env) -> None:
 # --- caching ---------------------------------------------------------------------------------
 
 
+def test_the_per_source_per_topic_limit_reaches_the_briefing(settings: Settings) -> None:
+    limited = Env(settings.model_copy(update={"max_passages_per_source_per_topic": 1}))
+    unlimited = Env(settings)  # the limit is off by default
+    assert settings.max_passages_per_source_per_topic is None
+    bullets = lambda e: e.client.get("/briefings/analyst").text.count("Finding from")  # noqa: E731
+    assert (bullets(limited), bullets(unlimited)) == (1, 2)
+
+
 def test_briefings_are_cached_per_persona(env: Env) -> None:
     first = env.client.get("/briefings/analyst").text
     calls = env.generator.calls  # type: ignore[attr-defined]
@@ -189,6 +197,33 @@ def test_provider_failures_become_clean_json_errors(
     assert "sk-leaky" not in response.text and "Traceback" not in response.text
     if name != "bug":  # an unexpected bug is logged with its traceback, provider errors are not
         assert "sk-leaky" not in caplog.text
+
+
+def test_debug_logging_explains_a_rejection_with_key_like_text_masked(
+    settings: Settings, caplog: pytest.LogCaptureFixture
+) -> None:
+    message = (
+        "Unsupported parameter: 'store' is not supported with this model. "
+        "Key sk-proj-abc123_DEF-456 and header Bearer eyJhbGciOi.secret were echoed."
+    )
+    env = Env(settings, RaisingGenerator(_status_error(openai.BadRequestError, 400)))
+    env.generator.error = openai.BadRequestError(  # type: ignore[attr-defined]
+        message, response=httpx.Response(400, request=_REQUEST), body=None
+    )
+    with caplog.at_level(logging.DEBUG, logger="briefing"):
+        response = env.client.get("/briefings/analyst")
+    assert response.status_code == 502
+    assert "Unsupported parameter: 'store'" in caplog.text  # what says what to change
+    assert "sk-proj" not in caplog.text and "eyJhbGciOi" not in caplog.text
+    assert "[masked]" in caplog.text
+    assert "Unsupported parameter" not in response.text  # never in a response
+
+
+def test_mask_secrets_leaves_ordinary_text_alone() -> None:
+    assert mask_secrets("The model 'gpt-x' does not support this") == (
+        "The model 'gpt-x' does not support this"
+    )
+    assert mask_secrets("key sk-abc, again SK-DEF.") == "key [masked], again [masked]"
 
 
 # --- startup validation (S9) and docs (S20) -----------------------------------------------------

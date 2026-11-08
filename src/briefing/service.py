@@ -130,7 +130,11 @@ class BriefingService:
             persona_topics,
             self._embedder,
             settings.passage_threshold,
+            settings.max_passages_per_topic,
             settings.max_passages_per_source,
+            settings.max_passages_per_source_per_topic,
+            (settings.cutoff_date, settings.latest_date),
+            settings.recency_bonus,
         )
         logger.info(
             "Persona %s: %d sources selected, %d kept with %d passages",

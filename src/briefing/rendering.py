@@ -8,6 +8,7 @@ the source table, never from the model (M7, S8, S14).
 import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from urllib.parse import urlsplit
 
 from briefing.models import (
     BriefingDraft,
@@ -108,6 +109,12 @@ def _safe_url(url: str) -> str:
     return url
 
 
+def _site_name(url: str) -> str:
+    """Name a source by its site, for pages whose title is missing or is just their address."""
+    host = urlsplit(url).hostname or ""
+    return host.removeprefix("www.") or "Untitled source"
+
+
 def render_markdown(
     persona: Persona,
     topics: Sequence[Topic],
@@ -142,7 +149,7 @@ def render_markdown(
 
     sources = [
         BriefingSource(
-            number=number, title=plain_text(source_titles[url]) or "Untitled source", url=url
+            number=number, title=plain_text(source_titles[url]) or _site_name(url), url=url
         )
         for url, number in numbers.items()
     ]

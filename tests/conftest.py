@@ -97,12 +97,32 @@ class EchoGenerator:
         )
 
 
+@pytest.fixture(autouse=True)
+def _isolate_settings_from_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Clear every setting from the environment, so a developer's values cannot affect a test."""
+    for name in Settings.model_fields:
+        monkeypatch.delenv(name.upper(), raising=False)
+
+
 @pytest.fixture
 def data_dir(tmp_path: Path) -> Path:
     (tmp_path / "topics.yaml").write_text(TOPICS_YAML, encoding="utf-8")
     (tmp_path / "personas.yaml").write_text(PERSONAS_YAML, encoding="utf-8")
     (tmp_path / "sources.json").write_text(json.dumps({"reference_by_id": SOURCES}), "utf-8")
     return tmp_path
+
+
+@pytest.fixture
+def configured(monkeypatch: pytest.MonkeyPatch, data_dir: Path) -> Path:
+    """Point the command-line tools at the tiny corpus through the environment."""
+    monkeypatch.chdir(data_dir)  # keeps a developer's real settings file out of the test
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test-secret")
+    monkeypatch.setenv("GENERATION_MODEL", "gen-model")
+    monkeypatch.setenv("EMBEDDING_MODEL", "embed-model")
+    monkeypatch.setenv("SOURCES_PATH", str(data_dir / "sources.json"))
+    monkeypatch.setenv("TOPICS_PATH", str(data_dir / "topics.yaml"))
+    monkeypatch.setenv("PERSONAS_PATH", str(data_dir / "personas.yaml"))
+    return data_dir
 
 
 @pytest.fixture

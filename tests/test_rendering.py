@@ -1,3 +1,5 @@
+import pytest
+
 from briefing.models import (
     BriefingDraft,
     DraftBullet,
@@ -170,9 +172,30 @@ def test_titles_are_escaped_and_cleaned_in_the_sources_list() -> None:
     assert "evil.test" not in markdown and "<b>" not in markdown
 
 
-def test_empty_title_falls_back_to_a_label() -> None:
+@pytest.mark.parametrize(
+    "title",
+    ["  ", "", "https://www.x.test/one", "https://www.x.test/content/full/2025.04.24.pdf"],
+)
+def test_missing_or_address_only_title_falls_back_to_the_site_name(title: str) -> None:
     checked = check(("a", [("Alpha.", ["s1p1"])]))
-    _, sources = render_markdown(PERSONA, TOPICS, checked, {"https://x.test/one": "  "})
+    markdown, sources = render_markdown(PERSONA, TOPICS, checked, {"https://x.test/one": title})
+    assert sources[0].title == "x.test"
+    assert "[x.test](https://x.test/one)" in markdown
+
+
+def test_site_name_drops_a_leading_www() -> None:
+    passages = [
+        Passage(id="s1p1", source_url="https://www.x.test/a", text="t", topic_id="a", score=1)
+    ]
+    checked = validate_draft(draft(("a", [("Alpha.", ["s1p1"])])), passages, ["a"])
+    _, sources = render_markdown(PERSONA, TOPICS, checked, {"https://www.x.test/a": ""})
+    assert sources[0].title == "x.test"
+
+
+def test_title_falls_back_to_a_label_when_the_address_has_no_host() -> None:
+    passages = [Passage(id="s1p1", source_url="not a url", text="t", topic_id="a", score=1)]
+    checked = validate_draft(draft(("a", [("Alpha.", ["s1p1"])])), passages, ["a"])
+    _, sources = render_markdown(PERSONA, TOPICS, checked, {"not a url": ""})
     assert sources[0].title == "Untitled source"
 
 

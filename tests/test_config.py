@@ -14,7 +14,12 @@ def test_settings_read_environment(monkeypatch: pytest.MonkeyPatch) -> None:
     settings = Settings(_env_file=None)
     assert settings.generation_model == "gen-model"
     assert settings.embedding_model == "embed-model"
-    assert settings.tagging_threshold == 0.35
+    assert settings.tagging_threshold == 0.30
+    assert settings.max_tags_per_source == 4
+    assert (settings.top_k, settings.per_topic_min) == (10, 2)
+    assert settings.passage_threshold == 0.40
+    assert (settings.max_passages_per_topic, settings.max_passages_per_source) == (7, 5)
+    assert settings.max_passages_per_source_per_topic is None  # off unless asked for
 
 
 def test_api_key_is_not_leaked_in_repr(monkeypatch: pytest.MonkeyPatch) -> None:

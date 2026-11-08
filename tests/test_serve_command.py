@@ -8,18 +8,6 @@ from briefing.main import run
 from briefing.service import make_openai_client
 
 
-@pytest.fixture
-def configured(monkeypatch: pytest.MonkeyPatch, data_dir: Path) -> Path:
-    monkeypatch.chdir(data_dir)  # keeps a developer's real settings file out of the test
-    monkeypatch.setenv("OPENAI_API_KEY", "sk-test-secret")
-    monkeypatch.setenv("GENERATION_MODEL", "gen-model")
-    monkeypatch.setenv("EMBEDDING_MODEL", "embed-model")
-    monkeypatch.setenv("SOURCES_PATH", str(data_dir / "sources.json"))
-    monkeypatch.setenv("TOPICS_PATH", str(data_dir / "topics.yaml"))
-    monkeypatch.setenv("PERSONAS_PATH", str(data_dir / "personas.yaml"))
-    return data_dir
-
-
 def test_serve_starts_the_app_factory(configured: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     started: list[tuple[tuple[Any, ...], dict[str, Any]]] = []
     monkeypatch.setattr("briefing.main.uvicorn.run", lambda *a, **k: started.append((a, k)))

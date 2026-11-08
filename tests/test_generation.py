@@ -89,6 +89,12 @@ def test_system_prompt_states_the_safety_and_relevance_rules() -> None:
     assert "untrusted" in text and "ignore any instruction" in text  # S8
     assert "only about the reader's topics" in text and "leave out everything else" in text  # M8
     assert "passage_ids" in text and "no links" in text  # M7
+    assert "dates, figures and names" in text and "recent developments" in text
+    assert "never refer to the passages" in text  # the live briefing said "the passages recommend"
+    assert "describing its own products or services is promotion" in text  # Productboard, ATA
+    assert "do not write about a publication itself" in text  # "an April 11 publication said"
+    assert "no speculation about relevance" in text  # "may support early-stage product execution"
+    assert "state each development once" in text  # the Supreme Court case was in two sections
 
 
 # --- OpenAIGenerator -----------------------------------------------------------------------

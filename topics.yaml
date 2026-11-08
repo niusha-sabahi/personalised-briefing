@@ -15,8 +15,8 @@ topics:
   - id: public-health-data
     label: Public health data
     description: >-
-      Public health data and surveillance: disease statistics and trends, CDC reports
-      such as MMWR, vaccination coverage, health surveys, epidemiology, mortality and
+      Public health data and surveillance: disease statistics and trends, outbreak and
+      case reporting, vaccination coverage, health surveys, epidemiology, mortality and
       outcomes data, and analyses of population health measures.
 
   - id: telemedicine

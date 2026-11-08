@@ -2,6 +2,7 @@
 
 import logging
 import mimetypes
+import re
 from collections.abc import Awaitable, Callable
 from pathlib import Path
 from typing import Literal
@@ -60,10 +61,18 @@ def configure_logging(level: str) -> None:
     logging.getLogger("briefing").setLevel(level)
 
 
+_KEY_LIKE = re.compile(r"\b(?:sk|pk|rk)-[^\s'\",)]+|Bearer\s+\S+", re.IGNORECASE)
+
+
+def mask_secrets(text: str) -> str:
+    """Replace anything that looks like an API key or bearer token with a placeholder."""
+    return _KEY_LIKE.sub("[masked]", text)
+
+
 def _error_handler(status: int, message: str) -> Callable[[Request, Exception], JSONResponse]:
     def handle(request: Request, exc: Exception) -> JSONResponse:
-        # Only the exception class and HTTP status are logged for provider errors: their
-        # messages can echo fragments of the API key.
+        # At INFO and above only the exception class and HTTP status are logged for provider
+        # errors: their messages can echo fragments of the API key.
         provider_status = getattr(exc, "status_code", None)
         log = logger.warning if status < 500 else logger.error
         log(
@@ -73,6 +82,9 @@ def _error_handler(status: int, message: str) -> Callable[[Request, Exception], 
             status,
             provider_status,
         )
+        # The provider's own message is what says which request parameter it rejected, so it
+        # is available when debugging, with key-like text masked. It is never in a response.
+        logger.debug("Detail with key-like text masked: %s", mask_secrets(str(exc)))
         return JSONResponse(status_code=status, content={"detail": message})
 
     return handle

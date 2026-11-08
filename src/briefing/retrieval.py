@@ -5,11 +5,14 @@ so tests pass a fake and nothing here talks to OpenAI.
 """
 
 import re
+from collections import Counter
 from collections.abc import Sequence
 from dataclasses import dataclass
+from datetime import date
 
 from briefing.embeddings import Embedder, source_embedding_text, topic_embedding_text
 from briefing.models import Passage, PreparedSource, Topic
+from briefing.sources import dates_in_text
 from briefing.tagging import Tag, similarity_matrix, tag_sources
 
 # Paragraphs shorter than this are merged into a neighbour: a heading or a one-line caption
@@ -17,8 +20,29 @@ from briefing.tagging import Tag, similarity_matrix, tag_sources
 MIN_PASSAGE_CHARS = 200
 # Longer paragraphs are split at sentence ends so a passage stays about one idea.
 MAX_PASSAGE_CHARS = 1200
+# A passage made mostly of URLs is a list of links, not prose.
+URL_SHARE_LIMIT = 0.15
 
 _SENTENCE_END = re.compile(r"(?<=[.!?])\s+")
+_URL = re.compile(r"https?://\S+")
+# What is left of a Markdown link after cleaning when its text and address were separated.
+_LINK_REMNANT = re.compile(r"\]\(https?://")
+# Consent banners, legal footers and page furniture. Deliberately no generic words such as
+# "copyright", which also appear in real news about copyright cases.
+_PAGE_FURNITURE = re.compile(
+    r"service marks?|not responsible for the content|do(?:es)? not constitute or imply "
+    r"endorsement|provided as a service|all rights reserved|privacy (?:policy|overview)|"
+    r"terms (?:of use|of service|and conditions)|cookies?\b|technical storage or access|"
+    r"accept all|subscribe (?:to|now|today)|sign up (?:for|to|now)|newsletter|"
+    r"downloads? (?:article|pdf|the)|read more|share (?:this|on)|follow us|"
+    r"related (?:articles|posts|content)|(?:recent|recommended) articles|click here",
+    re.IGNORECASE,
+)
+_NUMBERED_START = re.compile(r"^\s*\d{1,3}[^\w\s]{1,2}\s")
+_CITATION_MARKER = re.compile(
+    r"\bet al\b|\bdoi\b|\baccessed\b|\bavailable at\b|\bMMWR Morb\b|\bAtlanta, GA\b",
+    re.IGNORECASE,
+)
 
 
 @dataclass(frozen=True)
@@ -40,6 +64,35 @@ class SelectedSource:
     def best_score(self) -> float:
         """The source's highest score among the persona's topics."""
         return self.topics[0].score
+
+    @property
+    def primary_topic(self) -> str:
+        """The persona topic the source matches best."""
+        return self.topics[0].topic_id
+
+
+@dataclass(frozen=True)
+class PassageCandidate:
+    """A passage of a selected source, scored against every persona topic.
+
+    `recent` means the passage itself carries a date inside the recency window, which marks
+    it as news about the period and not an evergreen explainer.
+    """
+
+    source_index: int
+    position: int
+    text: str
+    scores: tuple[float, ...]
+    recent: bool = False
+
+
+@dataclass(frozen=True)
+class ChosenPassage:
+    """A passage chosen for a persona topic, and the score that earned it."""
+
+    candidate: PassageCandidate
+    topic_id: str
+    score: float
 
 
 @dataclass(frozen=True)
@@ -85,10 +138,12 @@ def select_sources(
 
     Candidates carry at least one of the persona's topics. They are ranked by their best
     score among those topics, ties broken by URL. Each persona topic first gets up to
-    `per_topic_min` of the best sources carrying it (a source already chosen for another
-    topic counts toward every topic it carries); the remaining places go to the best
-    candidates overall. If the minimums alone exceed `top_k`, topics earlier in the
-    persona's list win.
+    `per_topic_min` sources, in rounds: every topic gets its first before any gets its
+    second, so a long list of topics cannot starve the last ones. A chosen source counts
+    only for the topic it matches best, so a source that merely mentions a topic cannot
+    stand in for it. Topics short of sources take the best-scoring carriers of that topic.
+    The remaining places go to the best candidates overall. If the minimums exceed `top_k`,
+    topics earlier in the persona's list win the later rounds.
 
     Returns:
         The chosen sources in overall rank order.
@@ -103,16 +158,20 @@ def select_sources(
     candidates.sort(key=lambda c: (-c.best_score, c.prepared.source.url))
 
     chosen: dict[str, SelectedSource] = {}
-    for topic_id in persona_topic_ids:
-        carrying = [c for c in candidates if _score_for(c, topic_id) is not None]
-        carrying.sort(key=lambda c: (-(_score_for(c, topic_id) or 0.0), c.prepared.source.url))
-        have = sum(1 for c in carrying if c.prepared.source.url in chosen)
-        for candidate in carrying:
-            if have >= per_topic_min or len(chosen) >= top_k:
-                break
-            if candidate.prepared.source.url not in chosen:
-                chosen[candidate.prepared.source.url] = candidate
-                have += 1
+    # Sources taken specifically to fill a topic, which count for it even when another topic
+    # is their best match.
+    taken_for: dict[str, set[str]] = {topic_id: set() for topic_id in persona_topic_ids}
+    for round_number in range(1, per_topic_min + 1):
+        for topic_id in persona_topic_ids:
+            primary = {url for url, c in chosen.items() if c.primary_topic == topic_id}
+            if len(primary | taken_for[topic_id]) >= round_number or len(chosen) >= top_k:
+                continue
+            carrying = [c for c in candidates if _score_for(c, topic_id) is not None]
+            carrying.sort(key=lambda c: (-(_score_for(c, topic_id) or 0.0), c.prepared.source.url))
+            best = next((c for c in carrying if c.prepared.source.url not in chosen), None)
+            if best is not None:
+                chosen[best.prepared.source.url] = best
+                taken_for[topic_id].add(best.prepared.source.url)
     for candidate in candidates:
         if len(chosen) >= top_k:
             break
@@ -181,40 +240,135 @@ def split_passages(clean_text: str) -> list[str]:
     return passages
 
 
-@dataclass(frozen=True)
-class PassageMatch:
-    """A passage kept for the briefing: its position in the source, best topic and score."""
+def is_boilerplate(passage: str) -> bool:
+    """Return True for passages that are not article content (M8).
 
-    index: int
-    topic_id: str
-    score: float
+    Catches lists of links (mostly URLs, or leftover link syntax), consent banners and legal
+    footers, and numbered reference-list entries. These match topic descriptions well
+    because they repeat names such as "CDC" or "MMWR", so they must go before ranking.
+    The rules are heuristics: they leave some page furniture in and the model is also told
+    to ignore it.
+    """
+    url_characters = sum(len(url) for url in _URL.findall(passage))
+    if url_characters / max(len(passage), 1) > URL_SHARE_LIMIT:
+        return True
+    if len(_LINK_REMNANT.findall(passage)) >= 2:
+        return True
+    furniture = len(_PAGE_FURNITURE.findall(passage))
+    if furniture >= 2 or (furniture >= 1 and len(passage) < 300):
+        return True
+    return bool(_NUMBERED_START.match(passage) and _CITATION_MARKER.search(passage))
 
 
-def rank_passages(
-    passage_vectors: Sequence[Sequence[float]],
+def gather_candidates(
+    selected: Sequence[SelectedSource],
+    persona_topics: Sequence[Topic],
+    embedder: Embedder,
+    recent_window: tuple[date, date] | None = None,
+) -> list[PassageCandidate]:
+    """Split the selected sources into passages and score each against every persona topic.
+
+    Boilerplate passages are dropped before embedding, so they cost nothing and cannot be
+    chosen. Scores are in the order of `persona_topics`. With a `recent_window` (earliest,
+    latest), a passage that itself states a date inside it is marked `recent`.
+    """
+    topic_vectors = embedder.embed([topic_embedding_text(topic) for topic in persona_topics])
+    candidates: list[PassageCandidate] = []
+    for source_index, source in enumerate(selected):
+        texts = [t for t in split_passages(source.prepared.clean_text) if not is_boilerplate(t)]
+        if not texts:
+            continue
+        scores = similarity_matrix(embedder.embed(texts), topic_vectors)
+        for position, (text, row) in enumerate(zip(texts, scores, strict=True)):
+            recent = recent_window is not None and any(
+                recent_window[0] <= when <= recent_window[1]
+                for when in dates_in_text(text, recent_window[1])
+            )
+            candidates.append(
+                PassageCandidate(source_index, position, text, tuple(float(x) for x in row), recent)
+            )
+    return candidates
+
+
+def _best_for_topic(
+    candidates: Sequence[PassageCandidate], column: int, threshold: float, recency_bonus: float
+) -> list[PassageCandidate]:
+    """Candidates scoring at least `threshold` for a topic, best first, ties in document order.
+
+    The bonus only reorders: a passage must reach the threshold on its own score first.
+    """
+    qualifying = [c for c in candidates if c.scores[column] >= threshold]
+    return sorted(
+        qualifying,
+        key=lambda c: (
+            -(c.scores[column] + (recency_bonus if c.recent else 0.0)),
+            c.source_index,
+            c.position,
+        ),
+    )
+
+
+def choose_passages(
+    candidates: Sequence[PassageCandidate],
     topic_ids: Sequence[str],
-    topic_vectors: Sequence[Sequence[float]],
     threshold: float,
-    max_passages: int,
-) -> list[PassageMatch]:
-    """Keep the passages that match a persona topic well enough, best `max_passages` of them.
+    per_topic: int,
+    per_source: int,
+    per_source_per_topic: int | None = None,
+    recency_bonus: float = 0.0,
+) -> list[ChosenPassage]:
+    """Choose each topic's best passages, so every persona topic can have a section (M8).
 
-    Each passage is matched to its best-scoring topic (ties go to the earlier topic). Passages
-    below `threshold` are dropped, so off-topic text never reaches the model.
+    A passage qualifies for a topic when it scores at least `threshold` for it. Topics take
+    turns picking their best remaining passage (earlier topics first within a round), until
+    each has `per_topic` or runs out, so a topic with a dominant neighbour is not crowded
+    out. A passage serves one topic, and no source supplies more than `per_source`, nor
+    more than `per_source_per_topic` to any one topic (unset means no such limit), so a
+    topic draws on several sources and not just the one with the most on-topic text. A
+    passage about funding inside an AI article therefore appears under funding even though
+    AI is its best match overall. Passages marked `recent` rank `recency_bonus` higher when a
+    topic picks (qualifying and the reported score are unchanged), so news dated inside the
+    window beats an evergreen explainer of similar relevance.
 
     Returns:
-        The kept passages in document order, which reads best in a briefing.
+        The chosen passages in document order (by source, then position).
     """
-    if not passage_vectors:
-        return []
-    scores = similarity_matrix(passage_vectors, topic_vectors)
-    matches = [
-        PassageMatch(index, topic_ids[int(row.argmax())], float(row.max()))
-        for index, row in enumerate(scores)
-        if row.max() >= threshold
+    ranked = [
+        _best_for_topic(candidates, column, threshold, recency_bonus)
+        for column in range(len(topic_ids))
     ]
-    matches.sort(key=lambda m: (-m.score, m.index))
-    return sorted(matches[:max_passages], key=lambda m: m.index)
+    cursor = [0] * len(topic_ids)
+    picked = [0] * len(topic_ids)
+    taken: set[tuple[int, int]] = set()
+    from_source: Counter[int] = Counter()
+    from_source_for_topic: Counter[tuple[int, int]] = Counter()
+    chosen: list[ChosenPassage] = []
+    progress = True
+    while progress:
+        progress = False
+        for column, topic_id in enumerate(topic_ids):
+            if picked[column] >= per_topic:
+                continue
+            while cursor[column] < len(ranked[column]):
+                candidate = ranked[column][cursor[column]]
+                cursor[column] += 1
+                key = (candidate.source_index, candidate.position)
+                if key in taken or from_source[candidate.source_index] >= per_source:
+                    continue
+                topic_key = (candidate.source_index, column)
+                if (
+                    per_source_per_topic is not None
+                    and from_source_for_topic[topic_key] >= per_source_per_topic
+                ):
+                    continue
+                taken.add(key)
+                from_source[candidate.source_index] += 1
+                from_source_for_topic[topic_key] += 1
+                picked[column] += 1
+                chosen.append(ChosenPassage(candidate, topic_id, candidate.scores[column]))
+                progress = True
+                break
+    return sorted(chosen, key=lambda p: (p.candidate.source_index, p.candidate.position))
 
 
 def build_context(
@@ -222,35 +376,42 @@ def build_context(
     persona_topics: Sequence[Topic],
     embedder: Embedder,
     threshold: float,
-    max_passages: int,
+    per_topic: int,
+    per_source: int,
+    per_source_per_topic: int | None = None,
+    recent_window: tuple[date, date] | None = None,
+    recency_bonus: float = 0.0,
 ) -> BriefingContext:
-    """Choose the relevant passages of each selected source (M8).
+    """Choose the passages each persona topic will be written from (M8).
 
     Passages are embedded with the same cached embedder as everything else. A source with
-    no passage above the threshold is dropped: it has nothing relevant to cite. Passage ids
-    look like `s2p3` (second kept source, third kept passage) and are what the model cites.
+    no chosen passage is dropped: it has nothing relevant to cite. Passage ids look like
+    `s2p3` (second kept source, third kept passage) and are what the model cites.
     """
-    topic_ids = [topic.id for topic in persona_topics]
-    topic_vectors = embedder.embed([topic_embedding_text(topic) for topic in persona_topics])
-
-    kept: list[tuple[SelectedSource, list[tuple[str, PassageMatch]]]] = []
-    for source in selected:
-        texts = split_passages(source.prepared.clean_text)
-        vectors = embedder.embed(texts) if texts else []
-        matches = rank_passages(vectors, topic_ids, topic_vectors, threshold, max_passages)
-        if matches:
-            kept.append((source, [(texts[m.index], m) for m in matches]))
-
+    candidates = gather_candidates(selected, persona_topics, embedder, recent_window)
+    chosen = choose_passages(
+        candidates,
+        [topic.id for topic in persona_topics],
+        threshold,
+        per_topic,
+        per_source,
+        per_source_per_topic,
+        recency_bonus,
+    )
+    kept = sorted({p.candidate.source_index for p in chosen})
+    source_number = {index: number for number, index in enumerate(kept, start=1)}
+    in_source: Counter[int] = Counter()
     passages: list[Passage] = []
-    for source_number, (source, pairs) in enumerate(kept, start=1):
-        for passage_number, (text, match) in enumerate(pairs, start=1):
-            passages.append(
-                Passage(
-                    id=f"s{source_number}p{passage_number}",
-                    source_url=source.prepared.source.url,
-                    text=text,
-                    topic_id=match.topic_id,
-                    score=match.score,
-                )
+    for item in chosen:
+        index = item.candidate.source_index
+        in_source[index] += 1
+        passages.append(
+            Passage(
+                id=f"s{source_number[index]}p{in_source[index]}",
+                source_url=selected[index].prepared.source.url,
+                text=item.candidate.text,
+                topic_id=item.topic_id,
+                score=item.score,
             )
-    return BriefingContext(tuple(source for source, _ in kept), tuple(passages))
+        )
+    return BriefingContext(tuple(selected[i] for i in kept), tuple(passages))

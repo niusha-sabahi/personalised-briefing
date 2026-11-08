@@ -233,6 +233,14 @@ def _dates_in(text: str, latest: date) -> list[tuple[int, date]]:
     return sorted(found)
 
 
+def dates_in_text(text: str, latest: date) -> list[date]:
+    """Return every full date written in `text`, in reading order, ignoring any after `latest`.
+
+    Later dates are skipped because they are events and deadlines, not when something happened.
+    """
+    return [value for _, value in _dates_in(text, latest)]
+
+
 def _after_label(text: str, label: re.Pattern[str], latest: date) -> date | None:
     """Return the first date that starts shortly after a label such as "Published"."""
     for match in label.finditer(text):

@@ -1,10 +1,10 @@
-"""Command-line entry point: serve the API, or audit dates, topics and tagging."""
+"""Command-line entry point: serve the API, or audit dates, topics, tagging and passages."""
 
 import argparse
 import io
 import sys
 from collections import Counter
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from datetime import date
 from pathlib import Path
 
@@ -28,6 +28,8 @@ from briefing.embeddings import (
     topic_embedding_text,
 )
 from briefing.models import PreparedSource, Topic
+from briefing.reports import passages_report
+from briefing.retrieval import tag_corpus
 from briefing.service import make_embedder
 from briefing.sources import (
     MIN_CLEAN_CHARS,
@@ -38,7 +40,7 @@ from briefing.sources import (
     select_usable,
 )
 from briefing.tagging import similarity_matrix, tag_sources
-from briefing.topics import TaxonomyError, load_taxonomy
+from briefing.topics import Taxonomy, TaxonomyError, load_taxonomy
 
 # Thresholds shown in the calibration table of `briefing tags`.
 SWEEP_THRESHOLDS = (0.20, 0.25, 0.30, 0.35, 0.40, 0.45, 0.50)
@@ -177,16 +179,17 @@ def _serve() -> None:
     uvicorn.run("briefing.api:create_app", factory=True, host="127.0.0.1", port=8000)
 
 
-def _run_tags(threshold: float | None) -> None:
-    """Run `briefing tags`, turning setup and API failures into a short message."""
+def _run_live(
+    build: Callable[[Settings, Taxonomy, list[PreparedSource], CachedEmbedder], str],
+) -> None:
+    """Run a report that calls OpenAI, turning setup and API failures into a short message."""
     settings = _load_settings()
     try:
         taxonomy = load_taxonomy(settings.topics_path, settings.personas_path)
         prepared = prepare_sources(load_sources(settings.sources_path), settings.latest_date)
         usable = select_usable(prepared, settings.cutoff_date)
         embedder = _build_embedder(settings)
-        value = settings.tagging_threshold if threshold is None else threshold
-        report = tags_report(usable, taxonomy.topics, embedder, value, settings.max_tags_per_source)
+        report = build(settings, taxonomy, usable, embedder)
     except (TaxonomyError, SourceDataError) as exc:
         print(exc, file=sys.stderr)
         raise SystemExit(1) from exc
@@ -201,8 +204,76 @@ def _run_tags(threshold: float | None) -> None:
     print(f"\nEmbeddings: {embedder.misses} requested from OpenAI, {embedder.hits} from cache.")
 
 
+def _run_tags(threshold: float | None) -> None:
+    """Run `briefing tags`."""
+
+    def build(
+        settings: Settings,
+        taxonomy: Taxonomy,
+        usable: list[PreparedSource],
+        embedder: CachedEmbedder,
+    ) -> str:
+        value = settings.tagging_threshold if threshold is None else threshold
+        return tags_report(usable, taxonomy.topics, embedder, value, settings.max_tags_per_source)
+
+    _run_live(build)
+
+
+def _run_passages(
+    persona_id: str | None, threshold: float | None, recency_bonus: float | None
+) -> None:
+    """Run `briefing passages` for one persona, or for all of them."""
+
+    def build(
+        settings: Settings,
+        taxonomy: Taxonomy,
+        usable: list[PreparedSource],
+        embedder: CachedEmbedder,
+    ) -> str:
+        if persona_id is None:
+            personas = list(taxonomy.personas)
+        else:
+            persona = taxonomy.persona(persona_id)
+            if persona is None:
+                known = ", ".join(p.id for p in taxonomy.personas)
+                raise TaxonomyError(f"Unknown persona {persona_id!r}. Known personas: {known}.")
+            personas = [persona]
+        tagged = tag_corpus(
+            usable,
+            taxonomy.topics,
+            embedder,
+            settings.tagging_threshold,
+            settings.max_tags_per_source,
+        )
+        value = settings.passage_threshold if threshold is None else threshold
+        bonus = settings.recency_bonus if recency_bonus is None else recency_bonus
+        blocks = []
+        for persona in personas:
+            topics = [t for t in taxonomy.topics if t.id in persona.topic_ids]
+            topics.sort(key=lambda t: persona.topic_ids.index(t.id))
+            blocks.append(
+                passages_report(
+                    tagged,
+                    persona,
+                    topics,
+                    embedder,
+                    top_k=settings.top_k,
+                    per_topic_min=settings.per_topic_min,
+                    threshold=value,
+                    per_topic=settings.max_passages_per_topic,
+                    per_source=settings.max_passages_per_source,
+                    per_source_per_topic=settings.max_passages_per_source_per_topic,
+                    recent_window=(settings.cutoff_date, settings.latest_date),
+                    recency_bonus=bonus,
+                )
+            )
+        return ("\n\n" + "=" * 100 + "\n\n").join(blocks)
+
+    _run_live(build)
+
+
 def run(argv: Sequence[str] | None = None) -> None:
-    """Run the `briefing` command: `serve` (the default), `dates`, `topics` or `tags`."""
+    """Run the `briefing` command: `serve` (the default), `dates`, `topics`, `tags`, `passages`."""
     parser = argparse.ArgumentParser(
         prog="briefing", description="Personalised briefing generator."
     )
@@ -221,12 +292,27 @@ def run(argv: Sequence[str] | None = None) -> None:
         help="embed sources and topics (cached) and report tagging scores; needs the API key",
     )
     tags.add_argument("--threshold", type=float, help="override TAGGING_THRESHOLD for this run")
+    passages = commands.add_parser(
+        "passages",
+        help="show the sources and passages each persona's briefing would use; needs the API key",
+    )
+    passages.add_argument("--persona", help="persona id (default: every persona)")
+    passages.add_argument("--threshold", type=float, help="override PASSAGE_THRESHOLD for this run")
+    passages.add_argument(
+        "--recency-bonus",
+        type=float,
+        help="override RECENCY_BONUS for this run (0 shows the selection without it)",
+    )
     args = parser.parse_args(argv)
 
-    if args.command == "tags":
+    if args.command in ("tags", "passages"):
+        # Titles and passages can hold characters a Windows console cannot print.
         if isinstance(sys.stdout, io.TextIOWrapper):
             sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-        _run_tags(args.threshold)
+        if args.command == "tags":
+            _run_tags(args.threshold)
+        else:
+            _run_passages(args.persona, args.threshold, args.recency_bonus)
         return
     if args.command == "topics":
         try:
