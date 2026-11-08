@@ -34,7 +34,7 @@ Status: `[ ]` not started · `[~]` in progress or partly done · `[x]` complete 
 - [x] M12. A uv project: `pyproject.toml` plus a committed `uv.lock`, a `.python-version` file, and a `.venv/` created by `uv sync`. All commands run through the venv (`uv run ...`).
 - [~] M13. Plain Python only, with no notebooks.
 - [~] M14. `README.md` covers prerequisites, setup (`uv sync`, copy `.env.example` to `.env`), how to run the server and frontend, how to call the API, and how to run the tests.
-- [ ] M15. Extension: an Agent Skill (a `SKILL.md` with name and description frontmatter, following agentskills.io) that lets a coding agent set up, start and test the application, including calling the endpoints and checking that the output is valid.
+- [x] M15. Extension: an Agent Skill (a `SKILL.md` with name and description frontmatter, following agentskills.io) that lets a coding agent set up, start and test the application, including calling the endpoints and checking that the output is valid.
 - [~] M16. Deliver everything as one private GitHub repository. The repo root is the project root (the existing `takehome/` git repo, with its `origin` remote), and it contains all of the following, committed:
   - Backend source in `src/`, the frontend, and `tests/`.
   - `pyproject.toml`, `uv.lock`, `.python-version`, `.gitignore`, `.env.example`, and `README.md`.
